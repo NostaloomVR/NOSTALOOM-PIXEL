@@ -1,0 +1,99 @@
+name: NOSTALOOM Pixel - Native Android Build & Safety Audit
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/android-native-build.yml"
+      - "releases/v0.12/NOSTALOOM-Pixel-Pet-OS-v0.12-source.zip"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Configure Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android platform and Build-Tools
+        run: |
+          yes | sdkmanager --licenses > /dev/null || true
+          sdkmanager "platforms;android-34" "build-tools;34.0.0" "platform-tools"
+
+      - name: Extract existing source archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p workspace
+          unzip -q releases/v0.12/NOSTALOOM-Pixel-Pet-OS-v0.12-source.zip -d workspace
+          echo "Top-level source files:"
+          find workspace -maxdepth 3 -type f | head -80
+
+      - name: Audit Android permissions
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "## Android permission audit" >> "$GITHUB_STEP_SUMMARY"
+          manifests=$(find workspace -type f -name AndroidManifest.xml)
+          if [ -z "$manifests" ]; then
+            echo "No AndroidManifest.xml found; source archive cannot be verified." | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+          echo "$manifests" | while IFS= read -r f; do
+            echo "### $f" >> "$GITHUB_STEP_SUMMARY"
+            grep -oE 'android.permission.[A-Z_]+' "$f" | sort -u | tee -a "$GITHUB_STEP_SUMMARY" || true
+          done
+          if grep -REn 'REQUEST_INSTALL_PACKAGES|QUERY_ALL_PACKAGES|BIND_ACCESSIBILITY_SERVICE|READ_SMS|RECEIVE_SMS|READ_CALL_LOG|MANAGE_EXTERNAL_STORAGE|DEVICE_ADMIN' --include='AndroidManifest.xml' workspace; then
+            echo "Sensitive capabilities detected. Manual security review required; build blocked." | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+
+      - name: Locate Gradle project
+        shell: bash
+        run: |
+          set -euo pipefail
+          project=$(find workspace -name settings.gradle -o -name settings.gradle.kts | head -1)
+          if [ -z "$project" ]; then
+            echo "Archive does not contain a Gradle Android project. Native build blocked; need source project structure." | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+          echo "PROJECT_DIR=$(dirname "$project")" >> "$GITHUB_ENV"
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Build native debug APK (not Play Protect certified)
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$PROJECT_DIR"
+          if [ -f ./gradlew ]; then
+            chmod +x ./gradlew
+            ./gradlew --no-daemon assembleDebug
+          else
+            gradle --no-daemon assembleDebug
+          fi
+
+      - name: Check and publish Android APK artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          find "$PROJECT_DIR" -path '*/build/outputs/apk/*' -name '*.apk' -print
+          test -n "$(find "$PROJECT_DIR" -path '*/build/outputs/apk/*' -name '*.apk' -print -quit)"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: NOSTALOOM-Pixel-native-APK-UNVERIFIED
+          path: workspace/**/build/outputs/apk/**/*.apk
+          if-no-files-found: error
