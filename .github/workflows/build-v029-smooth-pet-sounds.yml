@@ -461,7 +461,18 @@ jobs:
           head=view.index('    static final class PetPanel extends ArtworkView {')
           tail=view.index('    static final class PetButton extends ArtworkView {',head)
           portion=view[head:tail]
-          assert 'HELLO, JAMAL!' in portion
+          assert 'meter(canvas, "GEMBIRA", pet.happiness, 15,' in portion
+          portion=portion.replace('meter(canvas, "GEMBIRA", pet.happiness, 15,',
+                                  'meter(canvas, "HAPPINESS", pet.happiness, 32,')
+          portion=portion.replace('meter(canvas, "KENYANG", pet.fullness, 41,',
+                                  'meter(canvas, "HUNGER", pet.fullness, 58,')
+          portion=portion.replace('meter(canvas, "TENAGA", pet.energy, 67,',
+                                  'meter(canvas, "ENERGY", pet.energy, 84,')
+          portion=portion.replace('text(canvas, state, 13, 94, 12,',
+                                  'text(canvas, state, 13, 124, 10,')
+          portion=portion.replace('        @Override void drawArtwork(Canvas canvas) {',
+              '        @Override void drawArtwork(Canvas canvas) {\\n' +
+              '            text(canvas, "HELLO, " + playerName + "!", 115, 18, 16, INK, Paint.Align.CENTER);',1)
           portion=portion.replace('private String state = "Mochi";',
                                  'private String state = "Mochi";\n        private String playerName = "JAMAL";')
           portion=portion.replace('        void refresh(String nextState) {',
@@ -470,7 +481,7 @@ jobs:
                       invalidate();
                   }
                   void refresh(String nextState) {''')
-          portion=portion.replace('"HELLO, JAMAL!"', '"HELLO, " + playerName + "!"')
+          # Header now renders the saved playerName dynamically
           view=view[:head]+portion+view[tail:]
           hud.write_text(view)
           
