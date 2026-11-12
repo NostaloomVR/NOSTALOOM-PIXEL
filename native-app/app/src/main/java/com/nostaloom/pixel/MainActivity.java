@@ -86,86 +86,122 @@ public final class MainActivity extends Activity {
     }};
 
     private void render(){
-        // Fixed dock is outside scrollable home content.
-        LinearLayout shell=vertical();shell.setBackgroundColor(BG);setContentView(shell);
-        ScrollView home=new ScrollView(this);home.setFillViewport(false);home.setVerticalScrollBarEnabled(false);
-        shell.addView(home,new LinearLayout.LayoutParams(-1,0,1));
-        DottedColumn contents=new DottedColumn();contents.setPadding(dp(14),dp(9),dp(14),dp(9));
-        home.addView(contents);
-        LinearLayout heading=horizontal();
-        TextView logo=label("▣ NOSTALOOM",18,YELLOW);heading.addView(logo,new LinearLayout.LayoutParams(0,dp(42),1));
-        TextView settings=label("⚙",25,YELLOW);heading.addView(settings,item(40,42));settings.setOnClickListener(v->showOptions());
-        add(contents,heading,42);
-        dotClock=label("",38,PURPLE);dotClock.setLetterSpacing(.035f);
+        getWindow().setStatusBarColor(0xff68b5a9);
+        getWindow().setNavigationBarColor(0xffb4b8a6);
+        final int BORDER=0xff8e7396,CREAM=0xfff2e4d5,INK=0xff51405e,LAVENDER=0xffc5addd;
+        FrameLayout scene=new FrameLayout(this);
+        scene.addView(new PixelLandscape(this),new FrameLayout.LayoutParams(-1,-1));
+        setContentView(scene);
+        LinearLayout screen=vertical();screen.setPadding(dp(12),dp(7),dp(12),dp(11));
+        scene.addView(screen,new FrameLayout.LayoutParams(-1,-1));
+
+        add(screen,label("✦  N O S T A L O O M  P I X E L  ✦",15,0xfff8e9e7),27);
+        add(screen,label("A N D R O I D   L A U N C H E R",9,0xfff8f0e9),20);
+
+        LinearLayout top=horizontal();
+        LinearLayout timeCard=vertical();timeCard.setPadding(dp(6),dp(8),dp(6),dp(5));
+        timeCard.setBackground(outlined(CREAM,18,BORDER));
+        LinearLayout.LayoutParams tL=new LinearLayout.LayoutParams(0,dp(102),1.2f);tL.rightMargin=dp(8);
+        top.addView(timeCard,tL);
+        dotClock=label("",29,0xffdac3ec);dotClock.setBackground(shape(0xff302a30,11));
         dotClock.setText(new SimpleDateFormat("hh:mm a",Locale.US).format(new Date()));
-        add(contents,dotClock,54);
-        add(contents,label("•  PIXEL PET OS  •",10,MUTED),22);
+        add(timeCard,dotClock,58);
+        TextView date=label(new SimpleDateFormat("EEE dd MMM",Locale.US).format(new Date()).toUpperCase(Locale.US),11,INK);
+        add(timeCard,date,28);
+        LinearLayout weather=vertical();weather.setGravity(Gravity.CENTER);weather.setPadding(dp(4),0,dp(4),0);
+        weather.setBackground(outlined(0xffd6c3e4,18,BORDER));
+        LinearLayout.LayoutParams wL=new LinearLayout.LayoutParams(0,dp(102),.9f);top.addView(weather,wL);
+        add(weather,label("☀  28°C",23,INK),47);
+        add(weather,label("PARTLY CLOUDY",10,INK),18);
+        add(weather,label("↑ 32°C    ↓ 24°C",10,INK),23);
+        add(screen,top,111);
 
-        LinearLayout game=vertical();game.setPadding(dp(10),dp(9),dp(10),dp(10));
-        game.setBackground(outlined(PANEL,16,0xff563b7c));
-        LinearLayout.LayoutParams gameLP=item(-1,249);gameLP.topMargin=dp(9);contents.addView(game,gameLP);
-        LinearLayout gameTop=horizontal();
-        TextView title=label("♥  PET",15,YELLOW);title.setGravity(Gravity.CENTER_VERTICAL);
-        gameTop.addView(title,new LinearLayout.LayoutParams(0,dp(32),1));
-        soundText=action(sound?"♫ ON":"♫ OFF",YELLOW,()->{sound=!sound;syncPet();});
-        gameTop.addView(soundText,item(69,31));add(game,gameTop,32);
-        FrameLayout petArea=new FrameLayout(this);
-        petArt=new PetArt();petArea.addView(petArt,new FrameLayout.LayoutParams(-1,-1));
-        add(game,petArea,112);
-        petName=label(names[pet],13,LIGHT);add(game,petName,22);
-        LinearLayout healthLine=horizontal();healthText=label("HEALTH "+health+"%",11,YELLOW);
-        healthLine.addView(healthText,new LinearLayout.LayoutParams(0,dp(21),1));
-        healthBar=new ProgressBar(this,null,android.R.attr.progressBarStyleHorizontal);healthBar.setMax(100);
-        healthBar.setProgressTintList(android.content.res.ColorStateList.valueOf(0xff87df94));
-        healthBar.setProgressBackgroundTintList(android.content.res.ColorStateList.valueOf(0xff49315a));
-        healthBar.setProgress(health);healthLine.addView(healthBar,item(138,13));
-        add(game,healthLine,24);
-        LinearLayout controls=horizontal();controls.setPadding(0,dp(7),0,0);
-        TextView feed=action("♥ FEED",YELLOW,()->{health=Math.min(100,health+13);petSound();syncPet();});
-        controls.addView(feed,new LinearLayout.LayoutParams(0,dp(37),1));
-        TextView next=action("◂ PET ▸",YELLOW,()->{pet=(pet+1)%names.length;petSound();syncPet();});
-        LinearLayout.LayoutParams np=new LinearLayout.LayoutParams(0,dp(37),1);np.leftMargin=dp(9);
-        controls.addView(next,np);add(game,controls,44);
+        // Let the fantasy island and cat remain visible between upper cards and pet panel.
+        View gap=new View(this);screen.addView(gap,new LinearLayout.LayoutParams(-1,0,1));
 
-        LinearLayout banner=horizontal();banner.setPadding(dp(6),0,dp(6),0);
-        TextView appsCaption=label("▦  MY APPS",14,YELLOW);
-        banner.addView(appsCaption,new LinearLayout.LayoutParams(0,dp(48),1));
-        TextView openApps=action("ALL APPS  ▸",YELLOW,()->showAppDrawer());
-        banner.addView(openApps,item(111,34));
-        add(contents,banner,50);
-        LinearLayout grid=vertical();grid.setBackground(outlined(0xff201338,13,0xff473366));
-        grid.setPadding(dp(7),dp(10),dp(7),dp(8));add(contents,grid,172);
-        String[][] entries={{"WHATSAPP","FACEBOOK","YOUTUBE"},{"TIKTOK","BROWSER","LOCK"},{"CALC","CAMERA","APPS"}};
-        for(String[] line:entries){
-            LinearLayout row=horizontal();add(grid,row,49);
-            for(String name:line){
-                LinearLayout cell=vertical();cell.setGravity(Gravity.CENTER);cell.setOnClickListener(v->shortcut(name));
-                LinearLayout.LayoutParams cp=new LinearLayout.LayoutParams(0,dp(46),1);
-                row.addView(cell,cp);
-                PixelGlyph glyph=new PixelGlyph(name);cell.addView(glyph,item(30,27));
-                TextView cap=label(name,8,LIGHT);add(cell,cap,13);
+        LinearLayout lower=horizontal();
+        LinearLayout left=vertical();
+        lower.addView(left,new LinearLayout.LayoutParams(0,-1,1));
+        LinearLayout petPanel=vertical();petPanel.setPadding(dp(8),dp(5),dp(8),dp(7));
+        petPanel.setBackground(outlined(CREAM,13,BORDER));
+        add(left,petPanel,143);
+        LinearLayout petTitle=horizontal();petTitle.setBackground(shape(0xffbda9d1,7));
+        TextView title=label("♡ NOSTALOOM PIXEL",11,INK);
+        petTitle.addView(title,new LinearLayout.LayoutParams(0,dp(25),1));
+        TextView choose=label("▣",18,INK);petTitle.addView(choose,item(30,25));
+        choose.setOnClickListener(v->{pet=(pet+1)%names.length;syncPet();});
+        add(petPanel,petTitle,25);
+        LinearLayout petContent=horizontal();
+        FrameLayout artBox=new FrameLayout(this);petArt=new PetArt();
+        artBox.addView(petArt);
+        petContent.addView(artBox,item(99,80));
+        LinearLayout bars=vertical();bars.setPadding(dp(7),dp(4),0,0);
+        petContent.addView(bars,new LinearLayout.LayoutParams(0,dp(80),1));
+        petName=label(names[pet],13,INK);add(bars,petName,23);
+        healthText=label("HAPPINESS  "+health+"%",10,INK);add(bars,healthText,17);
+        healthBar=new ProgressBar(this,null,android.R.attr.progressBarStyleHorizontal);
+        healthBar.setMax(100);healthBar.setProgress(health);
+        healthBar.setProgressTintList(android.content.res.ColorStateList.valueOf(0xffa678a3));
+        healthBar.setProgressBackgroundTintList(android.content.res.ColorStateList.valueOf(0xffcfc3ba));
+        add(bars,healthBar,13);
+        add(bars,label("HUNGER   58%   ENERGY   80%",9,INK),18);
+        add(petPanel,petContent,80);
+        LinearLayout actions=horizontal();
+        TextView feed=action("♥ FEED",LAVENDER,()->{health=Math.min(100,health+12);petSound();syncPet();});
+        actions.addView(feed,new LinearLayout.LayoutParams(0,dp(30),1));
+        soundText=action("♫ ON",LAVENDER,()->{sound=!sound;syncPet();});
+        LinearLayout.LayoutParams sLP=new LinearLayout.LayoutParams(0,dp(30),1);sLP.leftMargin=dp(7);
+        actions.addView(soundText,sLP);
+        add(petPanel,actions,30);
+        LinearLayout iconArea=vertical();iconArea.setPadding(dp(3),dp(12),dp(3),0);
+        add(left,iconArea,184);
+        String[][] icons={{"CAMERA","GALLERY","MUSIC"},{"FILES","SETTINGS","BROWSER"}};
+        for(String[] rowNames:icons){
+            LinearLayout line=horizontal();
+            for(String app:rowNames){
+                LinearLayout tile=vertical();tile.setGravity(Gravity.CENTER);
+                LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,dp(85),1);
+                lp.leftMargin=dp(3);lp.rightMargin=dp(3);line.addView(tile,lp);
+                LinearLayout plaque=vertical();plaque.setGravity(Gravity.CENTER);
+                plaque.setBackground(outlined(0xffe7d7e5,13,BORDER));
+                tile.addView(plaque,item(66,65));
+                PixelGlyph glyph=new PixelGlyph(app);plaque.addView(glyph,item(45,45));
+                TextView name=label(app,9,INK);name.setBackground(shape(CREAM,5));
+                add(tile,name,18);
+                tile.setOnClickListener(v->shortcut(app));
             }
+            add(iconArea,line,89);
         }
-        LinearLayout tray=horizontal();
-        TextView privateText=label("▣  PRIVATE APPS",12,MUTED);
-        tray.addView(privateText,new LinearLayout.LayoutParams(0,dp(46),1));
-        TextView openDrawer=action("APP DRAWER",YELLOW,()->showAppDrawer());tray.addView(openDrawer,item(126,33));
-        add(contents,tray,51);
 
-        LinearLayout fixed=vertical();fixed.setPadding(dp(12),dp(6),dp(12),dp(9));fixed.setBackgroundColor(BG);
-        add(shell,fixed,90);
-        HorizontalScrollView swipe=new HorizontalScrollView(this);swipe.setHorizontalScrollBarEnabled(false);
-        LinearLayout dock=horizontal();dock.setPadding(dp(8),dp(4),dp(8),dp(4));
-        dock.setBackground(outlined(YELLOW,14,0xffd3a747));swipe.addView(dock);
-        String[] dockNames={"PHONE","MESSAGES","BROWSER","SETTINGS","CAMERA","CALC","LOCK","APPS"};
-        for(String name:dockNames){
+        LinearLayout social=vertical();social.setGravity(Gravity.CENTER);
+        social.setPadding(dp(3),dp(8),dp(3),dp(8));
+        social.setBackground(outlined(CREAM,15,BORDER));
+        LinearLayout.LayoutParams soc=new LinearLayout.LayoutParams(dp(55),-1);soc.leftMargin=dp(8);
+        lower.addView(social,soc);
+        for(String app:new String[]{"WHATSAPP","FACEBOOK","YOUTUBE","TIKTOK"}){
             LinearLayout tile=vertical();tile.setGravity(Gravity.CENTER);
-            LinearLayout.LayoutParams lp=item(68,64);dock.addView(tile,lp);
-            PixelGlyph icon=new PixelGlyph(name);tile.addView(icon,item(39,38));
-            TextView cap=label(name,8,BG);add(tile,cap,16);
-            tile.setOnClickListener(v->shortcut(name));
+            social.addView(tile,new LinearLayout.LayoutParams(-1,0,1));
+            PixelGlyph glyph=new PixelGlyph(app);tile.addView(glyph,item(43,43));
+            tile.setOnClickListener(v->shortcut(app));
         }
-        add(fixed,swipe,70);
+        add(screen,lower,327);
+        LinearLayout dots=horizontal();dots.setGravity(Gravity.CENTER);
+        add(screen,dots,24);
+        for(int i=0;i<4;i++){TextView d=label("●",13,i==0?0xfff7e6d8:0xffc8d9d0);dots.addView(d,item(14,20));}
+
+        LinearLayout dock=horizontal();dock.setGravity(Gravity.CENTER);
+        dock.setPadding(dp(7),dp(5),dp(7),dp(5));
+        dock.setBackground(outlined(CREAM,17,BORDER));
+        add(screen,dock,70);
+        String[] shortcuts={"PHONE","MESSAGES","APPS"};
+        for(String app:shortcuts){
+            LinearLayout iconSlot=horizontal();iconSlot.setGravity(Gravity.CENTER);
+            dock.addView(iconSlot,new LinearLayout.LayoutParams(0,-1,1));
+            PixelGlyph glyph=new PixelGlyph(app);iconSlot.addView(glyph,item(40,42));
+            TextView cap=label(app.equals("APPS")?"▦":app,app.equals("APPS")?25:11,INK);
+            iconSlot.addView(cap,new LinearLayout.LayoutParams(-2,-1));
+            iconSlot.setOnClickListener(v->shortcut(app));
+        }
     }
     private void syncPet(){
         if(petName!=null)petName.setText(names[pet]);
