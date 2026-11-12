@@ -1,0 +1,25 @@
+name: Inspect legacy v0.12 assets for v0.20
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/inspect-legacy-v020.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: List legacy project source and graphics
+        shell: bash
+        run: |
+          set -euo pipefail
+          ls -lh releases/v0.12
+          echo '=== LEGACY SOURCE ZIP FILES ==='
+          unzip -Z -1 releases/v0.12/NOSTALOOM-Pixel-Pet-OS-v0.12-source.zip | head -150
+          echo '=== LEGACY SOURCE ZIP ASSET TYPES ==='
+          unzip -Z -1 releases/v0.12/NOSTALOOM-Pixel-Pet-OS-v0.12-source.zip | grep -Ei '\.(png|jpg|webp|svg|kt|java|html|css|js|json)$' | head -100 || true
+          echo '=== SOURCE README CONTENT ==='
+          unzip -p releases/v0.12/NOSTALOOM-Pixel-Pet-OS-v0.12-source.zip '*README*' | head -80 || true
