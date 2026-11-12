@@ -21,5 +21,11 @@ jobs:
           unzip -Z -1 releases/v0.12/NOSTALOOM-Pixel-Pet-OS-v0.12-source.zip | head -150
           echo '=== LEGACY SOURCE ZIP ASSET TYPES ==='
           unzip -Z -1 releases/v0.12/NOSTALOOM-Pixel-Pet-OS-v0.12-source.zip | grep -Ei '\.(png|jpg|webp|svg|kt|java|html|css|js|json)$' | head -100 || true
+          echo '=== LEGACY APP BUILD GRADLE ==='
+          unzip -p releases/v0.12/NOSTALOOM-Pixel-Pet-OS-v0.12-source.zip '*/app/build.gradle'
+          echo '=== LEGACY PROJECT BUILD GRADLE ==='
+          unzip -p releases/v0.12/NOSTALOOM-Pixel-Pet-OS-v0.12-source.zip '*/build.gradle'
+          echo '=== LEGACY MANIFEST ==='
+          unzip -p releases/v0.12/NOSTALOOM-Pixel-Pet-OS-v0.12-source.zip '*/app/src/main/AndroidManifest.xml'
           echo '=== SOURCE README CONTENT ==='
           unzip -p releases/v0.12/NOSTALOOM-Pixel-Pet-OS-v0.12-source.zip '*README*' | head -80 || true
