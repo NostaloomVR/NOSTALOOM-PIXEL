@@ -1,4 +1,4 @@
-name: NOSTALOOM Pixel - Safe Build Verification
+name: NOSTALOOM Pixel v0.17 - Native Test Build
 
 on:
   push:
@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build:
@@ -61,7 +61,7 @@ jobs:
           "$ANDROID_HOME/build-tools/34.0.0/zipalign" -c -v 4 "$APK"
           "$ANDROID_HOME/build-tools/34.0.0/apksigner" verify --verbose --print-certs "$APK"
           "$ANDROID_HOME/build-tools/34.0.0/aapt" dump badging "$APK" | head -3 | tee apk-package.txt
-          grep -F "com.nostaloom.pixel.cleaninstall" apk-package.txt
+          grep -F "com.nostaloom.pixel.v017test" apk-package.txt
           "$ANDROID_HOME/build-tools/34.0.0/aapt" dump permissions "$APK" | tee apk-permissions.txt
           if grep -Ei 'android.permission.(BIND_ACCESSIBILITY_SERVICE|READ_SMS|READ_CALL_LOG|REQUEST_INSTALL_PACKAGES)' apk-permissions.txt; then
             echo "::error::Sensitive permission detected"
@@ -72,7 +72,7 @@ jobs:
           cat apk-sha256.txt >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4
         with:
-          name: NOSTALOOM-Pixel-VERIFIED-BUILD-TEST-ARTIFACT
+          name: NOSTALOOM-Pixel-v0.17-NATIVE-TEST
           path: |
             native-app/app/build/outputs/apk/debug/app-debug.apk
             apk-sha256.txt
@@ -80,3 +80,32 @@ jobs:
             apk-permissions.txt
           if-no-files-found: error
 
+
+      - name: Publish v0.17 testing release after checks
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          cp native-app/app/build/outputs/apk/debug/app-debug.apk dist/NOSTALOOM-Pixel-v0.17-Native-Test.apk
+          cp apk-sha256.txt dist/SHA256.txt
+          cp apk-permissions.txt dist/permissions.txt
+          cat > dist/README.txt <<'EOF'
+          NOSTALOOM Pixel v0.17 Native Test.
+          This is a DEBUG-SIGNED testing APK. It is NOT a production release.
+          Package: com.nostaloom.pixel.v017test
+          Android 8.0 and later.
+          Tested by CI only for compilation, alignment, APK signature, permissions.
+          Google Play Protect approval and physical device installation are NOT verified.
+          Fingerprint lock, full Tamagotchi gameplay, original graphic fidelity
+          and actual real-time weather are NOT part of this build.
+          Do not disable Play Protect to install this test APK.
+          EOF
+          gh release create v0.17-native-test \
+            dist/NOSTALOOM-Pixel-v0.17-Native-Test.apk \
+            dist/SHA256.txt dist/permissions.txt dist/README.txt \
+            --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+            --title "NOSTALOOM Pixel v0.17 - Native Test (debug)" \
+            --notes "APK for testing shortcut improvements and existing pastel fantasy preview layout. CI signature and permission checks only. This is not a full restoration or Play Protect certification." \
+            --prerelease
