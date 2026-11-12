@@ -225,7 +225,19 @@ public final class MainActivity extends Activity {
     private void shortcut(String name){
         if(name.equals("APPS")){showAppDrawer();return;}
         if(name.equals("SETTINGS")){startActivity(new Intent(Settings.ACTION_SETTINGS));return;}
-        if(name.equals("LOCK")){Toast.makeText(this,"Secure lock requires a separate reviewed implementation",Toast.LENGTH_LONG).show();return;}
+        if(name.equals("LOCK") || name.equals("LOCKSCREEN")){Toast.makeText(this,"Secure lock is not yet enabled in this test build",Toast.LENGTH_LONG).show();return;}
+        if(name.equals("PHONE")){
+            try{startActivity(new Intent(Intent.ACTION_DIAL));return;}catch(Exception ignored){}
+        }
+        if(name.equals("CAMERA")){
+            try{startActivity(new Intent("android.media.action.IMAGE_CAPTURE"));return;}catch(Exception ignored){}
+        }
+        if(name.equals("BROWSER")){
+            try{startActivity(new Intent(Intent.ACTION_VIEW,android.net.Uri.parse("https://www.google.com")));return;}catch(Exception ignored){}
+        }
+        if(name.equals("MESSAGES")){
+            try{startActivity(new Intent(Intent.ACTION_SENDTO,android.net.Uri.parse("smsto:")));return;}catch(Exception ignored){}
+        }
         String pkg=null;
         switch(name){
             case "WHATSAPP":pkg="com.whatsapp";break;
@@ -236,12 +248,15 @@ public final class MainActivity extends Activity {
             case "CAMERA":pkg="com.android.camera";break;
             case "PHONE":pkg="com.google.android.dialer";break;
             case "MESSAGES":pkg="com.google.android.apps.messaging";break;
-            case "CALC":pkg="com.miui.calculator";break;
+            case "CALC":case "CALCULATOR":pkg="com.miui.calculator";break;
+            case "GALLERY":pkg="com.miui.gallery";break;
+            case "FILES":pkg="com.android.documentsui";break;
+            case "MUSIC":pkg="com.miui.player";break;
         }
         if(pkg!=null)try{Intent i=getPackageManager().getLaunchIntentForPackage(pkg);
             if(i!=null){startActivity(i);return;}}catch(Exception ignored){}
         // Fallback to label search for manufacturer-specific apps.
-        String word=name.equals("CALC")?"calculator":name.equals("PHONE")?"phone":name.toLowerCase(Locale.US);
+        String word=name.equals("CALC")?"calculator":name.equals("FILES")?"file":name.toLowerCase(Locale.US);
         PackageManager pm=getPackageManager();
         Intent q=new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER);
         for(ResolveInfo ri:pm.queryIntentActivities(q,0)){
