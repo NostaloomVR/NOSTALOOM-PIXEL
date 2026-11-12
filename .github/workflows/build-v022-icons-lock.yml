@@ -1,0 +1,270 @@
+name: NOSTALOOM Pixel v0.22 Visible Icons & Screen Lock
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/build-v022-icons-lock.yml
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  original:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Restore the original source, actual wallpaper, and Tamagotchi controls
+        shell: bash
+        run: |
+          set -euo pipefail
+          unzip -q releases/v0.12/NOSTALOOM-Pixel-Pet-OS-v0.12-source.zip -d restored
+          test -s restored/NOSTALOOM-Retro-Launcher/app/src/main/res/drawable-nodpi/cozy_home.png
+          ls -lh restored/NOSTALOOM-Retro-Launcher/app/src/main/res/drawable-nodpi/cozy_home.png
+          test -s restored/NOSTALOOM-Retro-Launcher/app/src/main/java/com/mygamestudio/nostaloomlauncher/MochiCare.java
+          test -s restored/NOSTALOOM-Retro-Launcher/app/src/main/java/com/mygamestudio/nostaloomlauncher/MochiSpriteView.java
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          root=Path('restored/NOSTALOOM-Retro-Launcher')
+          p=root/'app/build.gradle'
+          s=p.read_text()
+          assert "applicationId 'com.mygamestudio.nostaloomlauncher.pixelpet'" in s
+          s=s.replace("applicationId 'com.mygamestudio.nostaloomlauncher.pixelpet'", "applicationId 'com.mygamestudio.nostaloomlauncher.restoredv022'")
+          s=re.sub(r'versionCode\s+12\b', 'versionCode 21', s)
+          s=s.replace("versionName '0.12'", "versionName '0.21-original-hud-test'")
+          p.write_text(s)
+          manifest=root/'app/src/main/AndroidManifest.xml'
+          m=manifest.read_text()
+          # Notification access has been linked to prior device warnings;
+          # preserve gameplay but do not register any notification listener in this test build.
+          m,n=re.subn(r'\s*<service\b[^>]*NotificationFruitService.*?</service>', '', m, flags=re.S)
+          assert n==1, 'Expected one legacy notification listener service'
+          m=m.replace('NOSTALOOM Pixel Pet OS 0.12', 'NOSTALOOM Pixel v0.22 Original')
+          manifest.write_text(m)
+
+          # Reuse the original wallpaper and Mochi engine. Render actual icon artwork,
+          # not invisible tap areas, and provide opt-in Android system screen lock.
+          java=root/'app/src/main/java/com/mygamestudio/nostaloomlauncher/PixelLauncherActivity.java'
+          src=java.read_text()
+          marker='        socialShortcut(SocialApp.WHATSAPP, 531);'
+          assert src.count(marker)==1
+          new_icons='''        PixelHomeView.UtilityIcon calcIcon = new PixelHomeView.UtilityIcon(this, false);
+        screen.place(calcIcon, 265, 874, 98, 115);
+        calcIcon.setContentDescription("Calculator");
+        calcIcon.setOnClickListener(view -> calculator());
+        PixelHomeView.UtilityIcon fingerprintIcon = new PixelHomeView.UtilityIcon(this, true);
+        screen.place(fingerprintIcon, 374, 874, 101, 115);
+        fingerprintIcon.setContentDescription("Lockscreen fingerprint");
+        fingerprintIcon.setOnClickListener(view -> lockScreen());
+        fingerprintIcon.setOnLongClickListener(view -> {
+            openIntent(new Intent(Settings.ACTION_SECURITY_SETTINGS));
+            return true;
+        });
+'''
+          src=src.replace(marker,new_icons+marker)
+          marker='    private void camera() {'
+          assert src.count(marker)==1
+          methods='''    private void calculator() {
+        if (launchInstalled("com.miui.calculator")) return;
+        if (launchInstalled("com.google.android.calculator")) return;
+        Intent intent = new Intent(Intent.ACTION_MAIN);
+        intent.addCategory(Intent.CATEGORY_APP_CALCULATOR);
+        openIntent(intent);
+    }
+    private void lockScreen() {
+        android.app.admin.DevicePolicyManager manager =
+            (android.app.admin.DevicePolicyManager)getSystemService(DEVICE_POLICY_SERVICE);
+        android.content.ComponentName admin = new android.content.ComponentName(
+            this, PixelScreenAdmin.class);
+        if (manager == null) {
+            Toast.makeText(this, "Device policy tidak tersedia", Toast.LENGTH_LONG).show();
+            return;
+        }
+        if (manager.isAdminActive(admin)) {
+            try {
+                manager.lockNow();
+            } catch (SecurityException ex) {
+                Toast.makeText(this, "Kunci skrin ditolak Android", Toast.LENGTH_LONG).show();
+            }
+            return;
+        }
+        // The user must explicitly approve Android Device Admin before first lock.
+        new AlertDialog.Builder(this).setTitle("Aktifkan Screen OFF?")
+            .setMessage("Benarkan NOSTALOOM mengunci skrin apabila ikon fingerprint ditekan? "
+                + "Android mengurus buka kunci dengan cap jari yang sudah didaftarkan. "
+                + "Kebenaran pentadbir peranti boleh ditarik balik melalui Security Settings.")
+            .setNegativeButton("Batal", (d, which) -> {})
+            .setPositiveButton("Aktifkan", (d, which) -> {
+                Intent intent = new Intent(android.app.admin.DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN);
+                intent.putExtra(android.app.admin.DevicePolicyManager.EXTRA_DEVICE_ADMIN, admin);
+                intent.putExtra(android.app.admin.DevicePolicyManager.EXTRA_ADD_EXPLANATION,
+                    "Kebenaran pilihan untuk Screen OFF melalui ikon Lockscreen");
+                startActivity(intent);
+            }).show();
+    }
+'''
+          src=src.replace(marker,methods+marker)
+          java.write_text(src)
+
+          # Add explicit visible illustrated icon tiles above original image at the two
+          # blank bottom-right grid cells. PixelHomeView scales with phone dimensions.
+          hud=root/'app/src/main/java/com/mygamestudio/nostaloomlauncher/PixelHomeView.java'
+          view=hud.read_text()
+          insert='''    static final class UtilityIcon extends ArtworkView {
+        private final boolean fingerprint;
+        UtilityIcon(Context context, boolean fingerprint) {
+            super(context, 101, 115);
+            this.fingerprint = fingerprint;
+            setLayerType(View.LAYER_TYPE_SOFTWARE, null);
+            setFocusable(true);
+        }
+        @Override void drawArtwork(Canvas canvas) {
+            paint.setStyle(Paint.Style.FILL);
+            paint.setColor(0xff382b50);
+            canvas.drawRoundRect(2, 2, 99, 102, 13, 13, paint);
+            paint.setColor(fingerprint ? 0xffe7d9f5 : 0xfff8d9d8);
+            canvas.drawRoundRect(5, 5, 96, 99, 11, 11, paint);
+            paint.setColor(0xfff8f0e8);
+            canvas.drawRoundRect(13, 83, 88, 112, 5, 5, paint);
+            paint.setColor(0xff382b50);
+            paint.setStrokeWidth(2);
+            paint.setStyle(Paint.Style.STROKE);
+            canvas.drawRoundRect(13, 83, 88, 112, 5, 5, paint);
+            paint.setStyle(Paint.Style.FILL);
+            paint.setColor(0xff7655a0);
+            canvas.drawRoundRect(23, 17, 77, 79, 7, 7, paint);
+            if (fingerprint) {
+                paint.setColor(0xffe6b8ff);
+                paint.setStyle(Paint.Style.STROKE);
+                paint.setStrokeWidth(4);
+                for (int i=0;i<4;i++) {
+                    float inset=7+i*7;
+                    canvas.drawArc(29+inset/2, 22+inset/2, 71-inset/2, 72-inset/2,
+                        195, 280, false, paint);
+                }
+                paint.setStyle(Paint.Style.FILL);
+                paint.setColor(0xfff8e2fd);
+                canvas.drawCircle(50, 51, 3, paint);
+            } else {
+                paint.setColor(0xffded0ed);
+                canvas.drawRoundRect(29, 22, 71, 37, 2, 2, paint);
+                paint.setColor(0xff423157);
+                canvas.drawRect(34, 27, 65, 32, paint);
+                for (int row=0;row<3;row++)for(int col=0;col<3;col++) {
+                    paint.setColor(row==2&&col==2 ? 0xffe7a3ba : 0xffeee6f6);
+                    canvas.drawRect(29+col*15, 43+row*11, 40+col*15, 51+row*11, paint);
+                }
+            }
+            text(canvas, fingerprint?"Fingerprint":"Calculator",
+                50, 105, fingerprint?10:11, INK, Paint.Align.CENTER);
+        }
+    }
+
+'''
+          pos=view.index('    static final class PetButton extends ArtworkView {')
+          view=view[:pos]+insert+view[pos:]
+          hud.write_text(view)
+
+          # Register a device-admin receiver only for user-approved lockNow().
+          receiver=root/'app/src/main/java/com/mygamestudio/nostaloomlauncher/PixelScreenAdmin.java'
+          receiver.write_text('''package com.mygamestudio.nostaloomlauncher;
+public final class PixelScreenAdmin extends android.app.admin.DeviceAdminReceiver {}
+''')
+          xml=root/'app/src/main/res/xml'
+          xml.mkdir(parents=True,exist_ok=True)
+          (xml/'nostaloom_device_admin.xml').write_text('''<?xml version="1.0" encoding="utf-8"?>
+<device-admin xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-policies><force-lock /></uses-policies>
+</device-admin>
+''')
+          manifest=root/'app/src/main/AndroidManifest.xml'
+          m=manifest.read_text()
+          receiver_tag='''<receiver android:name="com.mygamestudio.nostaloomlauncher.PixelScreenAdmin"
+    android:permission="android.permission.BIND_DEVICE_ADMIN" android:exported="true">
+    <meta-data android:name="android.app.device_admin" android:resource="@xml/nostaloom_device_admin" />
+    <intent-filter><action android:name="android.app.action.DEVICE_ADMIN_ENABLED" /></intent-filter>
+</receiver>
+'''
+          assert '</application>' in m
+          m=m.replace('</application>',receiver_tag+'</application>')
+          manifest.write_text(m)
+          print('v0.22: visible calculator/fingerprint icons and opt-in Android screen lock')
+          print('Restored complete v0.12 source with original cozy_home.png and gameplay')
+          print('Removed notification listener registration for this test build')
+          PY
+      - name: Install Android SDK 34
+        shell: bash
+        run: |
+          set -euo pipefail
+          export ANDROID_HOME="$RUNNER_TEMP/android-sdk"
+          mkdir -p "$ANDROID_HOME/cmdline-tools"
+          curl -fLsS --retry 3 https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip -o "$RUNNER_TEMP/tools.zip"
+          unzip -q "$RUNNER_TEMP/tools.zip" -d "$ANDROID_HOME/cmdline-tools"
+          mv "$ANDROID_HOME/cmdline-tools/cmdline-tools" "$ANDROID_HOME/cmdline-tools/latest"
+          echo "ANDROID_HOME=$ANDROID_HOME" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> "$GITHUB_ENV"
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$ANDROID_HOME" --licenses >/dev/null || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$ANDROID_HOME" "platforms;android-34" "build-tools;34.0.0"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+      - name: Build full restored app from original sources
+        working-directory: restored/NOSTALOOM-Retro-Launcher
+        run: gradle --no-daemon assembleDebug
+      - name: Verify package, signature and original art
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK=restored/NOSTALOOM-Retro-Launcher/app/build/outputs/apk/debug/app-debug.apk
+          test -s "$APK"
+          "$ANDROID_HOME/build-tools/34.0.0/zipalign" -c -v 4 "$APK"
+          "$ANDROID_HOME/build-tools/34.0.0/apksigner" verify --verbose --print-certs "$APK"
+          "$ANDROID_HOME/build-tools/34.0.0/aapt" dump badging "$APK" | head -4 | tee app-info.txt
+          grep -F "com.mygamestudio.nostaloomlauncher.restoredv022" app-info.txt
+          "$ANDROID_HOME/build-tools/34.0.0/aapt" dump permissions "$APK" | tee app-permissions.txt
+          if grep -E 'android.permission.(BIND_NOTIFICATION_LISTENER_SERVICE|BIND_ACCESSIBILITY_SERVICE|READ_SMS|READ_CALL_LOG|QUERY_ALL_PACKAGES)' app-permissions.txt; then
+            echo "::error::Restricted permission unexpectedly found"
+            exit 1
+          fi
+          unzip -Z -1 "$APK" | grep -F 'res/drawable-nodpi' || echo "Resource packaging uses compiled asset identifiers"
+          sha256sum "$APK" | tee SHA256.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: NOSTALOOM-Pixel-v0.22-Original-Graphics-Test
+          path: |
+            restored/NOSTALOOM-Retro-Launcher/app/build/outputs/apk/debug/app-debug.apk
+            app-info.txt
+            app-permissions.txt
+            SHA256.txt
+          if-no-files-found: error
+      - name: Publish v0.22 test APK on GitHub Releases
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir dist
+          cp restored/NOSTALOOM-Retro-Launcher/app/build/outputs/apk/debug/app-debug.apk dist/NOSTALOOM-Pixel-v0.22-Original-Graphics-Test.apk
+          cp SHA256.txt app-permissions.txt dist/
+          cat > dist/README.txt <<'EOF'
+          NOSTALOOM Pixel v0.22 Visible Icons Lock Test.
+          Restored from the real archived v0.12 source, including cozy_home.png,
+          original floating-island wallpaper and Mochi cat game components.
+          Rebuilt as a separate package for safe side-by-side installation.
+          Notification listener is disabled in this build.
+          Debug-signed test APK; not Play Protect certified.
+          Fingerprint tile requests optional Device Admin and uses Android lockNow().
+          Unlock is handled by system lockscreen fingerprint if configured.
+          Do not bypass Google Play Protect warnings.
+          EOF
+          gh release create v0.22-original-graphics-test \
+            dist/NOSTALOOM-Pixel-v0.22-Original-Graphics-Test.apk \
+            dist/SHA256.txt dist/app-permissions.txt dist/README.txt \
+            --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+            --title "NOSTALOOM Pixel v0.22 - Visible Calculator & Screen Lock (Test)" \
+            --notes "Preserves original floating-island wallpaper, updates Mochi HUD, adds Calculator and fingerprint-gated app drawer. Separate debug app ID, notification listener disabled for safer testing. Test build only, not Play Protect certified." \
+            --prerelease
