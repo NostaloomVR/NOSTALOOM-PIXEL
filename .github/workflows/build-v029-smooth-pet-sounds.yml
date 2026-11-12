@@ -442,17 +442,11 @@ jobs:
           
           '''
           source=source.replace(methodmarker,soundmethods+methodmarker)
-          marker='    @Override protected void onStop() {'
-          assert source.count(marker)==1
-          source=source.replace(marker,'''    @Override protected void onDestroy() {
-                  if (petSoundPool != null) {
-                      petSoundPool.release();
-                      petSoundPool = null;
-                  }
-                  super.onDestroy();
-              }
-          
-          '''+marker)
+          # The legacy activity already defines onDestroy; extend it in place.
+          assert '        super.onDestroy();' in source
+          source=source.replace('        super.onDestroy();',
+              '        if (petSoundPool != null) { petSoundPool.release(); petSoundPool = null; }\\n'
+              + '        super.onDestroy();',1)
           activity.write_text(source)
           
           # Make the greeting editable while preserving the original Mochi HUD style.
