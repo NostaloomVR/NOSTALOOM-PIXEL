@@ -1,5 +1,5 @@
 plugins { id 'com.android.application' }
 android { namespace 'com.nostaloom.pixel'; compileSdk 34
-  defaultConfig { applicationId 'com.nostaloom.pixel.v017test'; minSdk 26; targetSdk 34; versionCode 18; versionName '0.17-native-test' }
+  defaultConfig { applicationId 'com.nostaloom.pixel.v018pettest'; minSdk 26; targetSdk 34; versionCode 19; versionName '0.18-interactive-pet-test' }
   compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
 }
