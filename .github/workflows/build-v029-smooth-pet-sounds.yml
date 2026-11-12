@@ -443,7 +443,7 @@ jobs:
           '''
           source=source.replace(methodmarker,soundmethods+methodmarker)
           # Extend the existing lifecycle method regardless of its super-call formatting.
-          m_destroy = re.search(r'void\\s+onDestroy\\s*\\(\\s*\\)\\s*\\{', source)
+          m_destroy = re.search(r'void\s+onDestroy\s*\(\s*\)\s*\{', source)
           assert m_destroy, 'Original Activity onDestroy missing'
           source = source[:m_destroy.end()] + (
               '\\n        if (petSoundPool != null) { petSoundPool.release(); petSoundPool = null; }'
