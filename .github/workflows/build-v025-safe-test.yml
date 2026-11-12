@@ -281,15 +281,15 @@ jobs:
           a=code.rfind('\n',0,a)+1
           b=code.index('    private void camera() {',a)
           safe_method='''    private void lockScreen() {
-        new AlertDialog.Builder(this).setTitle("Lockscreen")
+          new AlertDialog.Builder(this).setTitle("Lockscreen")
             .setMessage("Versi ujian ini tidak memerlukan Accessibility atau Device Admin. "
                 + "Untuk mengunci skrin, gunakan butang kuasa telefon. "
                 + "Fingerprint dikendalikan oleh Android Security Settings.")
             .setPositiveButton("Tetapan Keselamatan", (d, which) ->
                 openIntent(new Intent(Settings.ACTION_SECURITY_SETTINGS)))
             .setNegativeButton("Tutup", (d, which) -> {}).show();
-    }
-'''
+          }
+          '''
           code=code[:a]+safe_method+code[b:]
           code=code.replace('Settings.ACTION_ACCESSIBILITY_SETTINGS',
                             'Settings.ACTION_SECURITY_SETTINGS')
