@@ -1,5 +1,5 @@
 plugins { id 'com.android.application' }
 android { namespace 'com.nostaloom.pixel'; compileSdk 34
-  defaultConfig { applicationId 'com.nostaloom.pixel.nativepreview'; minSdk 26; targetSdk 34; versionCode 14; versionName '0.13.1-native-rebuild' }
+  defaultConfig { applicationId 'com.nostaloom.pixel.nativepreview'; minSdk 26; targetSdk 34; versionCode 15; versionName '0.14-retro-restoration' }
   compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
 }
