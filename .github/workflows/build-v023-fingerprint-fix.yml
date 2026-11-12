@@ -197,7 +197,8 @@ jobs:
           # The service does not read screen content or inspect interaction events.
           java=root/'app/src/main/java/com/mygamestudio/nostaloomlauncher/PixelLauncherActivity.java'
           src=java.read_text()
-          a=src.index('    private void lockScreen() {')
+          a=src.index('private void lockScreen() {')
+          a=src.rfind('\n',0,a)+1
           b=src.index('    private void camera() {',a)
           src=src[:a]+'''    private void lockScreen() {
                   if (android.os.Build.VERSION.SDK_INT >= 28 && PixelScreenLockService.lockNow()) return;
