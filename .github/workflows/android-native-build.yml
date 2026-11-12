@@ -1,4 +1,4 @@
-name: NOSTALOOM Pixel Native APK Preview
+name: NOSTALOOM Pixel v0.16 Clean Install Test
 
 on:
   push:
@@ -59,6 +59,8 @@ jobs:
           APK=native-app/app/build/outputs/apk/debug/app-debug.apk
           test -s "$APK"
           "$ANDROID_HOME/build-tools/34.0.0/apksigner" verify --verbose "$APK"
+          "$ANDROID_HOME/build-tools/34.0.0/aapt" dump badging "$APK" | head -3 | tee apk-package.txt
+          grep -F "com.nostaloom.pixel.cleaninstall" apk-package.txt
           "$ANDROID_HOME/build-tools/34.0.0/aapt" dump permissions "$APK" | tee apk-permissions.txt
           if grep -Ei 'android.permission.(BIND_ACCESSIBILITY_SERVICE|READ_SMS|READ_CALL_LOG|REQUEST_INSTALL_PACKAGES)' apk-permissions.txt; then
             echo "::error::Sensitive permission detected"
@@ -67,9 +69,10 @@ jobs:
           sha256sum "$APK" | tee apk-sha256.txt
       - uses: actions/upload-artifact@v4
         with:
-          name: NOSTALOOM-Pixel-v0.13-NATIVE-PREVIEW-UNVERIFIED
+          name: NOSTALOOM-Pixel-v0.16-CLEAN-INSTALL-UNVERIFIED
           path: |
             native-app/app/build/outputs/apk/debug/app-debug.apk
             apk-sha256.txt
+            apk-package.txt
             apk-permissions.txt
           if-no-files-found: error
