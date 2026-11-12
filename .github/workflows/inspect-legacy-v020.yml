@@ -40,3 +40,10 @@ jobs:
           grep -nEi 'calc|finger|lock|hud|pet|mochi|happy|hunger|energy|shortcut|icon|appdrawer|grid|onCreate' /tmp/PixelLauncherActivity.java | head -150 || true
           echo '=== PIXEL HOME END ==='
           tail -100 /tmp/PixelHomeView.java
+
+          echo '=== LAUNCHER LINES 118-215 ==='
+          sed -n '118,215p' /tmp/PixelLauncherActivity.java
+          echo '=== LAUNCHER LINES 347-460 ==='
+          sed -n '347,460p' /tmp/PixelLauncherActivity.java
+          echo '=== HUD LINES 290-340 ==='
+          sed -n '290,340p' /tmp/PixelHomeView.java
