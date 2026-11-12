@@ -60,3 +60,10 @@ jobs:
           sed -n '205,295p' /tmp/PixelLauncherActivity.java
           echo '=== HUD CLASS ROOT ==='
           sed -n '1,110p' /tmp/PixelHomeView.java
+
+          echo '=== CLOCK DATE PLATE ==='
+          sed -n '120,310p' /tmp/PixelHomeView.java
+          echo '=== LAUNCHER HOME WIDGET POSITIONS ==='
+          sed -n '122,230p' /tmp/PixelLauncherActivity.java
+          echo '=== ORIGINAL ACTIVATION AND NAV ==='
+          sed -n '460,575p' /tmp/PixelLauncherActivity.java
