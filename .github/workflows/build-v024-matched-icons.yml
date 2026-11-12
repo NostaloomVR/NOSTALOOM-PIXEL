@@ -58,12 +58,12 @@ jobs:
           marker='        socialShortcut(SocialApp.WHATSAPP, 531);'
           assert src.count(marker)==1
           new_icons='''        tapZone("Calculator", 236, 858, 103, 120, this::calculator);
-        View fingerprintZone=tapZone("Lockscreen", 343, 858, 103, 120, this::lockScreen);
-        fingerprintZone.setOnLongClickListener(view -> {
+          View fingerprintZone=tapZone("Lockscreen", 343, 858, 103, 120, this::lockScreen);
+          fingerprintZone.setOnLongClickListener(view -> {
             openIntent(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS));
             return true;
-        });
-'''
+          });
+          '''
           src=src.replace(marker,new_icons+marker)
           marker='    private void camera() {'
           assert src.count(marker)==1
