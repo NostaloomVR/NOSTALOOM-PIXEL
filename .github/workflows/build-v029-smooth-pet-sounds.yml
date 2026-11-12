@@ -445,7 +445,7 @@ jobs:
           # The legacy activity already defines onDestroy; extend it in place.
           assert '        super.onDestroy();' in source
           source=source.replace('        super.onDestroy();',
-              '        if (petSoundPool != null) { petSoundPool.release(); petSoundPool = null; }\\n'
+              '        if (petSoundPool != null) { petSoundPool.release(); petSoundPool = null; }\n'
               + '        super.onDestroy();',1)
           activity.write_text(source)
           
