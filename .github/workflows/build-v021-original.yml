@@ -125,7 +125,7 @@ jobs:
           # It does NOT unlock the Android system lock screen.
           manifest=root/'app/src/main/AndroidManifest.xml'
           m=manifest.read_text()
-          m=m.replace('    <queries>', '    <uses-permission android:name="android.permission.USE_BIOMETRIC" />\\n    <queries>',1)
+          m=m.replace('    <queries>', '    <uses-permission android:name="android.permission.USE_BIOMETRIC" />\n    <queries>',1)
           manifest.write_text(m)
           print('v0.21 patch installed: Calculator, biometric-gated app drawer, improved Mochi HUD')
           print('Restored complete v0.12 source with original cozy_home.png and gameplay')
