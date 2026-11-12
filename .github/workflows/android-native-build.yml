@@ -1,4 +1,4 @@
-name: NOSTALOOM Pixel v0.17 - Native Test Build
+name: NOSTALOOM Pixel v0.18 - Interactive Pet Test Build
 
 on:
   push:
@@ -61,7 +61,7 @@ jobs:
           "$ANDROID_HOME/build-tools/34.0.0/zipalign" -c -v 4 "$APK"
           "$ANDROID_HOME/build-tools/34.0.0/apksigner" verify --verbose --print-certs "$APK"
           "$ANDROID_HOME/build-tools/34.0.0/aapt" dump badging "$APK" | head -3 | tee apk-package.txt
-          grep -F "com.nostaloom.pixel.v017test" apk-package.txt
+          grep -F "com.nostaloom.pixel.v018pettest" apk-package.txt
           "$ANDROID_HOME/build-tools/34.0.0/aapt" dump permissions "$APK" | tee apk-permissions.txt
           if grep -Ei 'android.permission.(BIND_ACCESSIBILITY_SERVICE|READ_SMS|READ_CALL_LOG|REQUEST_INSTALL_PACKAGES)' apk-permissions.txt; then
             echo "::error::Sensitive permission detected"
@@ -72,7 +72,7 @@ jobs:
           cat apk-sha256.txt >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4
         with:
-          name: NOSTALOOM-Pixel-v0.17-NATIVE-TEST
+          name: NOSTALOOM-Pixel-v0.18-PET-TEST
           path: |
             native-app/app/build/outputs/apk/debug/app-debug.apk
             apk-sha256.txt
@@ -81,31 +81,31 @@ jobs:
           if-no-files-found: error
 
 
-      - name: Publish v0.17 testing release after checks
+      - name: Publish v0.18 testing release after checks
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           mkdir -p dist
-          cp native-app/app/build/outputs/apk/debug/app-debug.apk dist/NOSTALOOM-Pixel-v0.17-Native-Test.apk
+          cp native-app/app/build/outputs/apk/debug/app-debug.apk dist/NOSTALOOM-Pixel-v0.18-Pet-Test.apk
           cp apk-sha256.txt dist/SHA256.txt
           cp apk-permissions.txt dist/permissions.txt
           cat > dist/README.txt <<'EOF'
-          NOSTALOOM Pixel v0.17 Native Test.
+          NOSTALOOM Pixel v0.18 Interactive Pet Test.
           This is a DEBUG-SIGNED testing APK. It is NOT a production release.
-          Package: com.nostaloom.pixel.v017test
+          Package: com.nostaloom.pixel.v018pettest
           Android 8.0 and later.
           Tested by CI only for compilation, alignment, APK signature, permissions.
           Google Play Protect approval and physical device installation are NOT verified.
-          Fingerprint lock, full Tamagotchi gameplay, original graphic fidelity
+          Fingerprint lock, full Tamagotchi sprite gameplay, original graphic fidelity
           and actual real-time weather are NOT part of this build.
           Do not disable Play Protect to install this test APK.
           EOF
-          gh release create v0.17-native-test \
-            dist/NOSTALOOM-Pixel-v0.17-Native-Test.apk \
+          gh release create v0.18-pet-test \
+            dist/NOSTALOOM-Pixel-v0.18-Pet-Test.apk \
             dist/SHA256.txt dist/permissions.txt dist/README.txt \
             --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
-            --title "NOSTALOOM Pixel v0.17 - Native Test (debug)" \
-            --notes "APK for testing shortcut improvements and existing pastel fantasy preview layout. CI signature and permission checks only. This is not a full restoration or Play Protect certification." \
+            --title "NOSTALOOM Pixel v0.18 - Interactive Pet Test (debug)" \
+            --notes "APK for testing synchronized island and panel pet animations, saved pet stats, Feed and Play buttons, and existing shortcut improvements. CI signature and permission checks only. This is not a full restoration or Play Protect certification." \
             --prerelease
