@@ -52,23 +52,23 @@ jobs:
           marker='        socialShortcut(SocialApp.WHATSAPP, 531);'
           assert src.count(marker)==1
           src=src.replace(marker,'''        tapZone("Calculator", 264, 874, 100, 115, this::calculator);
-        tapZone("Fingerprint", 374, 874, 100, 115, this::fingerprintGate);
-''' + marker)
+                  tapZone("Fingerprint", 374, 874, 100, 115, this::fingerprintGate);
+          ''' + marker)
           marker='    private void camera() {'
           assert src.count(marker)==1
           method='''    private void calculator() {
-        if (launchInstalled("com.miui.calculator")) return;
-        if (launchInstalled("com.google.android.calculator")) return;
-        Intent intent = new Intent(Intent.ACTION_MAIN);
-        intent.addCategory(Intent.CATEGORY_APP_CALCULATOR);
-        openIntent(intent);
-    }
-    private void fingerprintGate() {
-        if (android.os.Build.VERSION.SDK_INT < 28) {
+                  if (launchInstalled("com.miui.calculator")) return;
+                  if (launchInstalled("com.google.android.calculator")) return;
+                  Intent intent = new Intent(Intent.ACTION_MAIN);
+                  intent.addCategory(Intent.CATEGORY_APP_CALCULATOR);
+                  openIntent(intent);
+              }
+              private void fingerprintGate() {
+                  if (android.os.Build.VERSION.SDK_INT < 28) {
             openIntent(new Intent(Settings.ACTION_SECURITY_SETTINGS));
             return;
-        }
-        try {
+                  }
+                  try {
             android.hardware.biometrics.BiometricPrompt prompt =
                 new android.hardware.biometrics.BiometricPrompt.Builder(this)
                     .setTitle("NOSTALOOM PRIVATE APPS")
@@ -89,12 +89,12 @@ jobs:
                         }
                     }
                 });
-        } catch (Exception problem) {
+                  } catch (Exception problem) {
             Toast.makeText(this, "Tetapkan cap jari dalam Android Security", Toast.LENGTH_SHORT).show();
             openIntent(new Intent(Settings.ACTION_SECURITY_SETTINGS));
-        }
-    }
-'''
+                  }
+              }
+          '''
           src=src.replace(marker,method+marker)
           java.write_text(src)
           # Rebuild the Mochi HUD in the original region without touching the illustrated background asset.
@@ -115,9 +115,9 @@ jobs:
             meter(canvas, "HUNGER", pet.fullness, 70, 0xffdfae61);
             meter(canvas, "ENERGY", pet.energy, 98, 0xffa786dd);
             text(canvas, state, 12, 128, 10, INK, Paint.Align.LEFT);
-        }
-
-'''
+                  }
+          
+          '''
           portion=portion[:a]+replacement+portion[b:]
           view=view[:head]+portion+view[tail:]
           hud.write_text(view)
