@@ -52,3 +52,11 @@ jobs:
           unzip -p releases/v0.12/NOSTALOOM-Pixel-Pet-OS-v0.12-source.zip '*/MochiSpriteView.java' | head -320
           echo '=== MOCHI CARE ACTIONS ==='
           unzip -p releases/v0.12/NOSTALOOM-Pixel-Pet-OS-v0.12-source.zip '*/MochiCare.java' | head -160
+
+          echo '=== LAUNCHER IMPORTS & FIELDS ==='
+          sed -n '1,125p' /tmp/PixelLauncherActivity.java
+          echo '=== LAUNCHER PET ACTION & AUDIO ==='
+          grep -nE 'petAction|petMenu|ToneGenerator|SoundPool|MediaPlayer|onStart|onStop|setRunning|tick|Handler' /tmp/PixelLauncherActivity.java
+          sed -n '205,295p' /tmp/PixelLauncherActivity.java
+          echo '=== HUD CLASS ROOT ==='
+          sed -n '1,110p' /tmp/PixelHomeView.java
