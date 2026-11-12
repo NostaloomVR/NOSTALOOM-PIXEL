@@ -47,3 +47,8 @@ jobs:
           sed -n '347,460p' /tmp/PixelLauncherActivity.java
           echo '=== HUD LINES 290-340 ==='
           sed -n '290,340p' /tmp/PixelHomeView.java
+
+          echo '=== MOCHI SPRITE FULL SOURCE ==='
+          unzip -p releases/v0.12/NOSTALOOM-Pixel-Pet-OS-v0.12-source.zip '*/MochiSpriteView.java' | head -320
+          echo '=== MOCHI CARE ACTIONS ==='
+          unzip -p releases/v0.12/NOSTALOOM-Pixel-Pet-OS-v0.12-source.zip '*/MochiCare.java' | head -160
