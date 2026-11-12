@@ -1,0 +1,121 @@
+name: NOSTALOOM Pixel v0.20 Original Graphics Restore
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/build-v020-original.yml
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  original:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Restore the original source, actual wallpaper, and Tamagotchi controls
+        shell: bash
+        run: |
+          set -euo pipefail
+          unzip -q releases/v0.12/NOSTALOOM-Pixel-Pet-OS-v0.12-source.zip -d restored
+          test -s restored/NOSTALOOM-Retro-Launcher/app/src/main/res/drawable-nodpi/cozy_home.png
+          ls -lh restored/NOSTALOOM-Retro-Launcher/app/src/main/res/drawable-nodpi/cozy_home.png
+          test -s restored/NOSTALOOM-Retro-Launcher/app/src/main/java/com/mygamestudio/nostaloomlauncher/MochiCare.java
+          test -s restored/NOSTALOOM-Retro-Launcher/app/src/main/java/com/mygamestudio/nostaloomlauncher/MochiSpriteView.java
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          root=Path('restored/NOSTALOOM-Retro-Launcher')
+          p=root/'app/build.gradle'
+          s=p.read_text()
+          assert "applicationId 'com.mygamestudio.nostaloomlauncher.pixelpet'" in s
+          s=s.replace("applicationId 'com.mygamestudio.nostaloomlauncher.pixelpet'", "applicationId 'com.mygamestudio.nostaloomlauncher.restoredv020'")
+          s=re.sub(r'versionCode\s+12\b', 'versionCode 20', s)
+          s=s.replace("versionName '0.12'", "versionName '0.20-original-graphics-test'")
+          p.write_text(s)
+          manifest=root/'app/src/main/AndroidManifest.xml'
+          m=manifest.read_text()
+          # Notification access has been linked to prior device warnings;
+          # preserve gameplay but do not register any notification listener in this test build.
+          m,n=re.subn(r'\s*<service\b[^>]*NotificationFruitService.*?</service>', '', m, flags=re.S)
+          assert n==1, 'Expected one legacy notification listener service'
+          m=m.replace('NOSTALOOM Pixel Pet OS 0.12', 'NOSTALOOM Pixel v0.20 Original')
+          manifest.write_text(m)
+          print('Restored complete v0.12 source with original cozy_home.png and gameplay')
+          print('Removed notification listener registration for this test build')
+          PY
+      - name: Install Android SDK 34
+        shell: bash
+        run: |
+          set -euo pipefail
+          export ANDROID_HOME="$RUNNER_TEMP/android-sdk"
+          mkdir -p "$ANDROID_HOME/cmdline-tools"
+          curl -fLsS --retry 3 https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip -o "$RUNNER_TEMP/tools.zip"
+          unzip -q "$RUNNER_TEMP/tools.zip" -d "$ANDROID_HOME/cmdline-tools"
+          mv "$ANDROID_HOME/cmdline-tools/cmdline-tools" "$ANDROID_HOME/cmdline-tools/latest"
+          echo "ANDROID_HOME=$ANDROID_HOME" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> "$GITHUB_ENV"
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$ANDROID_HOME" --licenses >/dev/null || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$ANDROID_HOME" "platforms;android-34" "build-tools;34.0.0"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+      - name: Build full restored app from original sources
+        working-directory: restored/NOSTALOOM-Retro-Launcher
+        run: gradle --no-daemon assembleDebug
+      - name: Verify package, signature and original art
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK=restored/NOSTALOOM-Retro-Launcher/app/build/outputs/apk/debug/app-debug.apk
+          test -s "$APK"
+          "$ANDROID_HOME/build-tools/34.0.0/zipalign" -c -v 4 "$APK"
+          "$ANDROID_HOME/build-tools/34.0.0/apksigner" verify --verbose --print-certs "$APK"
+          "$ANDROID_HOME/build-tools/34.0.0/aapt" dump badging "$APK" | head -4 | tee app-info.txt
+          grep -F "com.mygamestudio.nostaloomlauncher.restoredv020" app-info.txt
+          "$ANDROID_HOME/build-tools/34.0.0/aapt" dump permissions "$APK" | tee app-permissions.txt
+          if grep -E 'android.permission.(BIND_NOTIFICATION_LISTENER_SERVICE|BIND_ACCESSIBILITY_SERVICE|READ_SMS|READ_CALL_LOG|QUERY_ALL_PACKAGES)' app-permissions.txt; then
+            echo "::error::Restricted permission unexpectedly found"
+            exit 1
+          fi
+          unzip -Z -1 "$APK" | grep -F 'res/drawable-nodpi' || echo "Resource packaging uses compiled asset identifiers"
+          sha256sum "$APK" | tee SHA256.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: NOSTALOOM-Pixel-v0.20-Original-Graphics-Test
+          path: |
+            restored/NOSTALOOM-Retro-Launcher/app/build/outputs/apk/debug/app-debug.apk
+            app-info.txt
+            app-permissions.txt
+            SHA256.txt
+          if-no-files-found: error
+      - name: Publish v0.20 test APK on GitHub Releases
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir dist
+          cp restored/NOSTALOOM-Retro-Launcher/app/build/outputs/apk/debug/app-debug.apk dist/NOSTALOOM-Pixel-v0.20-Original-Graphics-Test.apk
+          cp SHA256.txt app-permissions.txt dist/
+          cat > dist/README.txt <<'EOF'
+          NOSTALOOM Pixel v0.20 Original Graphics Test.
+          Restored from the real archived v0.12 source, including cozy_home.png,
+          original floating-island wallpaper and Mochi cat game components.
+          Rebuilt as a separate package for safe side-by-side installation.
+          Notification listener is disabled in this build.
+          Debug-signed test APK; not Play Protect certified.
+          Fingerprint system lock/unlock is not verified.
+          Do not bypass Google Play Protect warnings.
+          EOF
+          gh release create v0.20-original-graphics-test \
+            dist/NOSTALOOM-Pixel-v0.20-Original-Graphics-Test.apk \
+            dist/SHA256.txt dist/app-permissions.txt dist/README.txt \
+            --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+            --title "NOSTALOOM Pixel v0.20 - Original Graphics Restoration (Test)" \
+            --notes "Restores original archived v0.12 floating-island art and Mochi pet engine instead of placeholder visuals. Separate debug app ID, notification listener disabled for safer testing. Test build only, not Play Protect certified." \
+            --prerelease
