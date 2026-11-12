@@ -53,47 +53,47 @@ jobs:
           marker='        socialShortcut(SocialApp.WHATSAPP, 531);'
           assert src.count(marker)==1
           new_icons='''        PixelHomeView.UtilityIcon calcIcon = new PixelHomeView.UtilityIcon(this, false);
-        screen.place(calcIcon, 265, 874, 98, 115);
-        calcIcon.setContentDescription("Calculator");
-        calcIcon.setOnClickListener(view -> calculator());
-        PixelHomeView.UtilityIcon fingerprintIcon = new PixelHomeView.UtilityIcon(this, true);
-        screen.place(fingerprintIcon, 374, 874, 101, 115);
-        fingerprintIcon.setContentDescription("Lockscreen fingerprint");
-        fingerprintIcon.setOnClickListener(view -> lockScreen());
-        fingerprintIcon.setOnLongClickListener(view -> {
+          screen.place(calcIcon, 265, 874, 98, 115);
+          calcIcon.setContentDescription("Calculator");
+          calcIcon.setOnClickListener(view -> calculator());
+          PixelHomeView.UtilityIcon fingerprintIcon = new PixelHomeView.UtilityIcon(this, true);
+          screen.place(fingerprintIcon, 374, 874, 101, 115);
+          fingerprintIcon.setContentDescription("Lockscreen fingerprint");
+          fingerprintIcon.setOnClickListener(view -> lockScreen());
+          fingerprintIcon.setOnLongClickListener(view -> {
             openIntent(new Intent(Settings.ACTION_SECURITY_SETTINGS));
             return true;
-        });
-'''
+          });
+          '''
           src=src.replace(marker,new_icons+marker)
           marker='    private void camera() {'
           assert src.count(marker)==1
           methods='''    private void calculator() {
-        if (launchInstalled("com.miui.calculator")) return;
-        if (launchInstalled("com.google.android.calculator")) return;
-        Intent intent = new Intent(Intent.ACTION_MAIN);
-        intent.addCategory(Intent.CATEGORY_APP_CALCULATOR);
-        openIntent(intent);
-    }
-    private void lockScreen() {
-        android.app.admin.DevicePolicyManager manager =
+          if (launchInstalled("com.miui.calculator")) return;
+          if (launchInstalled("com.google.android.calculator")) return;
+          Intent intent = new Intent(Intent.ACTION_MAIN);
+          intent.addCategory(Intent.CATEGORY_APP_CALCULATOR);
+          openIntent(intent);
+          }
+          private void lockScreen() {
+          android.app.admin.DevicePolicyManager manager =
             (android.app.admin.DevicePolicyManager)getSystemService(DEVICE_POLICY_SERVICE);
-        android.content.ComponentName admin = new android.content.ComponentName(
+          android.content.ComponentName admin = new android.content.ComponentName(
             this, PixelScreenAdmin.class);
-        if (manager == null) {
+          if (manager == null) {
             Toast.makeText(this, "Device policy tidak tersedia", Toast.LENGTH_LONG).show();
             return;
-        }
-        if (manager.isAdminActive(admin)) {
+          }
+          if (manager.isAdminActive(admin)) {
             try {
                 manager.lockNow();
             } catch (SecurityException ex) {
                 Toast.makeText(this, "Kunci skrin ditolak Android", Toast.LENGTH_LONG).show();
             }
             return;
-        }
-        // The user must explicitly approve Android Device Admin before first lock.
-        new AlertDialog.Builder(this).setTitle("Aktifkan Screen OFF?")
+          }
+          // The user must explicitly approve Android Device Admin before first lock.
+          new AlertDialog.Builder(this).setTitle("Aktifkan Screen OFF?")
             .setMessage("Benarkan NOSTALOOM mengunci skrin apabila ikon fingerprint ditekan? "
                 + "Android mengurus buka kunci dengan cap jari yang sudah didaftarkan. "
                 + "Kebenaran pentadbir peranti boleh ditarik balik melalui Security Settings.")
@@ -105,8 +105,8 @@ jobs:
                     "Kebenaran pilihan untuk Screen OFF melalui ikon Lockscreen");
                 startActivity(intent);
             }).show();
-    }
-'''
+          }
+          '''
           src=src.replace(marker,methods+marker)
           java.write_text(src)
 
@@ -115,14 +115,14 @@ jobs:
           hud=root/'app/src/main/java/com/mygamestudio/nostaloomlauncher/PixelHomeView.java'
           view=hud.read_text()
           insert='''    static final class UtilityIcon extends ArtworkView {
-        private final boolean fingerprint;
-        UtilityIcon(Context context, boolean fingerprint) {
+          private final boolean fingerprint;
+          UtilityIcon(Context context, boolean fingerprint) {
             super(context, 101, 115);
             this.fingerprint = fingerprint;
             setLayerType(View.LAYER_TYPE_SOFTWARE, null);
             setFocusable(true);
-        }
-        @Override void drawArtwork(Canvas canvas) {
+          }
+          @Override void drawArtwork(Canvas canvas) {
             paint.setStyle(Paint.Style.FILL);
             paint.setColor(0xff382b50);
             canvas.drawRoundRect(2, 2, 99, 102, 13, 13, paint);
@@ -161,10 +161,10 @@ jobs:
             }
             text(canvas, fingerprint?"Fingerprint":"Calculator",
                 50, 105, fingerprint?10:11, INK, Paint.Align.CENTER);
-        }
-    }
+          }
+          }
 
-'''
+          '''
           pos=view.index('    static final class PetButton extends ArtworkView {')
           view=view[:pos]+insert+view[pos:]
           hud.write_text(view)
@@ -172,23 +172,23 @@ jobs:
           # Register a device-admin receiver only for user-approved lockNow().
           receiver=root/'app/src/main/java/com/mygamestudio/nostaloomlauncher/PixelScreenAdmin.java'
           receiver.write_text('''package com.mygamestudio.nostaloomlauncher;
-public final class PixelScreenAdmin extends android.app.admin.DeviceAdminReceiver {}
-''')
+          public final class PixelScreenAdmin extends android.app.admin.DeviceAdminReceiver {}
+          ''')
           xml=root/'app/src/main/res/xml'
           xml.mkdir(parents=True,exist_ok=True)
           (xml/'nostaloom_device_admin.xml').write_text('''<?xml version="1.0" encoding="utf-8"?>
-<device-admin xmlns:android="http://schemas.android.com/apk/res/android">
-    <uses-policies><force-lock /></uses-policies>
-</device-admin>
-''')
+          <device-admin xmlns:android="http://schemas.android.com/apk/res/android">
+          <uses-policies><force-lock /></uses-policies>
+          </device-admin>
+          ''')
           manifest=root/'app/src/main/AndroidManifest.xml'
           m=manifest.read_text()
           receiver_tag='''<receiver android:name="com.mygamestudio.nostaloomlauncher.PixelScreenAdmin"
-    android:permission="android.permission.BIND_DEVICE_ADMIN" android:exported="true">
-    <meta-data android:name="android.app.device_admin" android:resource="@xml/nostaloom_device_admin" />
-    <intent-filter><action android:name="android.app.action.DEVICE_ADMIN_ENABLED" /></intent-filter>
-</receiver>
-'''
+          android:permission="android.permission.BIND_DEVICE_ADMIN" android:exported="true">
+          <meta-data android:name="android.app.device_admin" android:resource="@xml/nostaloom_device_admin" />
+          <intent-filter><action android:name="android.app.action.DEVICE_ADMIN_ENABLED" /></intent-filter>
+          </receiver>
+          '''
           assert '</application>' in m
           m=m.replace('</application>',receiver_tag+'</application>')
           manifest.write_text(m)
