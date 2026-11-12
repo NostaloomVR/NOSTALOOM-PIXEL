@@ -471,7 +471,7 @@ jobs:
           portion=portion.replace('text(canvas, state, 13, 94, 12,',
                                   'text(canvas, state, 13, 124, 10,')
           portion=portion.replace('        @Override void drawArtwork(Canvas canvas) {',
-              '        @Override void drawArtwork(Canvas canvas) {\\n' +
+              '        @Override void drawArtwork(Canvas canvas) {\n' +
               '            text(canvas, "HELLO, " + playerName + "!", 115, 18, 16, INK, Paint.Align.CENTER);',1)
           portion=portion.replace('private String state = "Mochi";',
                                  'private String state = "Mochi";\n        private String playerName = "JAMAL";')
