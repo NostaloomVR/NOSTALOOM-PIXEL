@@ -47,7 +47,10 @@ public final class MainActivity extends Activity {
             LIGHT=0xfff8e8ff, MUTED=0xffae91c7, YELLOW=0xffffd65e, RED=0xfff16b89;
     private final Handler timer = new Handler();
     private final String[] names={"MOCHI CAT","PIXEL PUP","BUNNY POP"};
-    private int pet=0, health=87, theme=0;
+    private int pet=0, health=87, hunger=58, energy=80, theme=0, motionFrame=0, motionTicks=0;
+    private String petAction="IDLE";
+    private PetArt islandCat;
+    private TextView petStats;
     private boolean sound=true, blink=false;
     private TextView healthText, soundText, petName, dotClock;
     private ProgressBar healthBar;
@@ -76,11 +79,20 @@ public final class MainActivity extends Activity {
     }
     @Override public void onCreate(Bundle state){super.onCreate(state);
         getWindow().setStatusBarColor(0xff100a1c);getWindow().setNavigationBarColor(0xff090613);
-        render();timer.postDelayed(tick,650);
+        android.content.SharedPreferences prefs=getSharedPreferences("nostaloom_pet",MODE_PRIVATE);
+        pet=prefs.getInt("pet",0)%names.length;
+        health=prefs.getInt("happy",87);hunger=prefs.getInt("hunger",58);energy=prefs.getInt("energy",80);
+        sound=prefs.getBoolean("sound",true);
+        render();syncPet();timer.postDelayed(tick,650);
     }
     @Override protected void onDestroy(){timer.removeCallbacksAndMessages(null);if(tone!=null)tone.release();super.onDestroy();}
     private final Runnable tick=new Runnable(){public void run(){
-        blink=!blink;if(petArt!=null)petArt.invalidate();
+        blink=!blink;motionFrame++;
+        if(motionTicks>0){motionTicks--;if(motionTicks==0)petAction="IDLE";}
+        else if(motionFrame%14==0){String[] acts={"IDLE","WALK","RUN","PLAY","REST","SLEEP"};
+            petAction=acts[(motionFrame/14)%acts.length];}
+        if(motionFrame%40==0){hunger=Math.max(0,hunger-1);energy=Math.max(0,energy-1);syncPet();}
+        if(petArt!=null)petArt.invalidate();if(islandCat!=null)islandCat.invalidate();
         if(dotClock!=null)dotClock.setText(new SimpleDateFormat("hh:mm a",Locale.US).format(new Date()));
         timer.postDelayed(this,650);
     }};
@@ -117,7 +129,11 @@ public final class MainActivity extends Activity {
         add(screen,top,111);
 
         // Let the fantasy island and cat remain visible between upper cards and pet panel.
-        View gap=new View(this);screen.addView(gap,new LinearLayout.LayoutParams(-1,0,1));
+        FrameLayout gap=new FrameLayout(this);screen.addView(gap,new LinearLayout.LayoutParams(-1,0,1));
+        islandCat=new PetArt();
+        FrameLayout.LayoutParams catLP=new FrameLayout.LayoutParams(dp(77),dp(73),Gravity.CENTER);
+        catLP.topMargin=dp(16);gap.addView(islandCat,catLP);
+        gap.setOnClickListener(v->showPetActions());
 
         LinearLayout lower=horizontal();
         LinearLayout left=vertical();
@@ -134,6 +150,7 @@ public final class MainActivity extends Activity {
         LinearLayout petContent=horizontal();
         FrameLayout artBox=new FrameLayout(this);petArt=new PetArt();
         artBox.addView(petArt);
+        artBox.setOnClickListener(v->showPetActions());
         petContent.addView(artBox,item(99,80));
         LinearLayout bars=vertical();bars.setPadding(dp(7),dp(4),0,0);
         petContent.addView(bars,new LinearLayout.LayoutParams(0,dp(80),1));
@@ -144,18 +161,19 @@ public final class MainActivity extends Activity {
         healthBar.setProgressTintList(android.content.res.ColorStateList.valueOf(0xffa678a3));
         healthBar.setProgressBackgroundTintList(android.content.res.ColorStateList.valueOf(0xffcfc3ba));
         add(bars,healthBar,13);
-        add(bars,label("HUNGER   58%   ENERGY   80%",9,INK),18);
+        petStats=label("HUNGER "+hunger+"%   ENERGY "+energy+"%",9,INK);add(bars,petStats,18);
         add(petPanel,petContent,80);
         LinearLayout actions=horizontal();
-        TextView feed=action("♥ FEED",LAVENDER,()->{health=Math.min(100,health+12);petSound();syncPet();});
+        TextView feed=action("♥ FEED",LAVENDER,()->doPetAction("EAT"));
         actions.addView(feed,new LinearLayout.LayoutParams(0,dp(30),1));
         soundText=action("♫ ON",LAVENDER,()->{sound=!sound;syncPet();});
         LinearLayout.LayoutParams sLP=new LinearLayout.LayoutParams(0,dp(30),1);sLP.leftMargin=dp(7);
         actions.addView(soundText,sLP);
         add(petPanel,actions,30);
+        petPanel.setOnLongClickListener(v->{showPetActions();return true;});
         LinearLayout iconArea=vertical();iconArea.setPadding(dp(3),dp(12),dp(3),0);
         add(left,iconArea,184);
-        String[][] icons={{"CAMERA","GALLERY","MUSIC"},{"FILES","SETTINGS","BROWSER"}};
+        String[][] icons={{"CAMERA","GALLERY","MUSIC","FILES"},{"SETTINGS","BROWSER","CALCULATOR","LOCKSCREEN"}};
         for(String[] rowNames:icons){
             LinearLayout line=horizontal();
             for(String app:rowNames){
@@ -203,12 +221,35 @@ public final class MainActivity extends Activity {
             iconSlot.setOnClickListener(v->shortcut(app));
         }
     }
+    private void persistPet(){
+        getSharedPreferences("nostaloom_pet",MODE_PRIVATE).edit()
+            .putInt("pet",pet).putInt("happy",health).putInt("hunger",hunger)
+            .putInt("energy",energy).putBoolean("sound",sound).apply();
+    }
+    private void doPetAction(String action){
+        petAction=action;motionTicks=7;
+        if(action.equals("EAT")){hunger=Math.min(100,hunger+23);health=Math.min(100,health+5);}
+        else if(action.equals("PLAY")){health=Math.min(100,health+19);energy=Math.max(0,energy-13);hunger=Math.max(0,hunger-6);}
+        else if(action.equals("SLEEP")){energy=Math.min(100,energy+28);}
+        else if(action.equals("RUN")){health=Math.min(100,health+7);energy=Math.max(0,energy-9);}
+        else if(action.equals("REST")){energy=Math.min(100,energy+14);}
+        petSound();syncPet();
+    }
+    private void showPetActions(){
+        final String[] actions={"FEED","PLAY","RUN","WALK","SLEEP","REST"};
+        new android.app.AlertDialog.Builder(this).setTitle(names[pet]+" • TAMAGOTCHI")
+            .setItems(actions,(dialog,which)->doPetAction(
+                actions[which].equals("FEED")?"EAT":actions[which]))
+            .show();
+    }
     private void syncPet(){
         if(petName!=null)petName.setText(names[pet]);
-        if(healthText!=null)healthText.setText("HEALTH "+health+"%");
+        if(healthText!=null)healthText.setText("HAPPINESS "+health+"%");
+        if(petStats!=null)petStats.setText("HUNGER "+hunger+"%  ENERGY "+energy+"%");
         if(healthBar!=null)healthBar.setProgress(health);
         if(soundText!=null)soundText.setText(sound?"♫ ON":"♫ OFF");
-        if(petArt!=null)petArt.invalidate();
+        if(petArt!=null)petArt.invalidate();if(islandCat!=null)islandCat.invalidate();
+        persistPet();
     }
     private void petSound(){if(!sound)return;try{
         if(tone==null)tone=new ToneGenerator(AudioManager.STREAM_MUSIC,35);
@@ -338,10 +379,14 @@ public final class MainActivity extends Activity {
         @Override protected void onDraw(Canvas c){super.onDraw(c);
             String[] art=sprites[pet];int max=0;for(String line:art)max=Math.max(max,line.length());
             float unit=Math.min(getWidth()/(float)(max+5),getHeight()/(float)(art.length+2));
-            float left=(getWidth()-max*unit)*.5f,top=(getHeight()-art.length*unit)*.5f+(blink?unit:0);
+            float left=(getWidth()-max*unit)*.5f,top=(getHeight()-art.length*unit)*.5f;
+            if(petAction.equals("WALK")||petAction.equals("RUN"))left+=(motionFrame%4-2)*unit*(petAction.equals("RUN")?2:1);
+            if(petAction.equals("PLAY")||petAction.equals("RUN"))top-=(motionFrame%2)*unit*2;
+            if(petAction.equals("SLEEP"))top+=unit*3;
+            if(petAction.equals("IDLE")||petAction.equals("REST"))top+=(blink?unit:0);
             for(int y=0;y<art.length;y++)for(int x=0;x<art[y].length();x++){
                 char a=art[y].charAt(x);if(a=='.')continue;
-                int color=a=='K'?0xff7c4db2:a=='P'?(pet==2?0xfff2e1fc:pet==1?0xffcfa0f5:0xffd9b0f9):a=='W'?(blink?0xffd7b5eb:0xff221139):0xffeb719c;
+                int color=a=='K'?0xff7c4db2:a=='P'?(pet==2?0xfff2e1fc:pet==1?0xffcfa0f5:0xffd9b0f9):a=='W'?((blink||petAction.equals("SLEEP"))?0xffd7b5eb:0xff221139):0xffeb719c;
                 p.setColor(color);c.drawRect(left+x*unit,top+y*unit,left+(x+1)*unit+.15f,top+(y+1)*unit+.15f,p);
             }
         }
