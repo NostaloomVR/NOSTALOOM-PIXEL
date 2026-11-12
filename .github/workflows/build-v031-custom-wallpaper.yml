@@ -1,0 +1,821 @@
+name: NOSTALOOM Pixel v0.31 Fantasy Wallpaper Import + Live Widgets
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/build-v031-custom-wallpaper.yml
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  original:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Prepare Pillow for pixel-perfect native artwork patch
+        shell: bash
+        run: |
+          python3 -m venv "$RUNNER_TEMP/pixel-venv"
+          "$RUNNER_TEMP/pixel-venv/bin/pip" install --disable-pip-version-check pillow
+      - name: Restore the original source, actual wallpaper, and Tamagotchi controls
+        shell: bash
+        run: |
+          set -euo pipefail
+          unzip -q releases/v0.12/NOSTALOOM-Pixel-Pet-OS-v0.12-source.zip -d restored
+          test -s restored/NOSTALOOM-Retro-Launcher/app/src/main/res/drawable-nodpi/cozy_home.png
+          ls -lh restored/NOSTALOOM-Retro-Launcher/app/src/main/res/drawable-nodpi/cozy_home.png
+          test -s restored/NOSTALOOM-Retro-Launcher/app/src/main/java/com/mygamestudio/nostaloomlauncher/MochiCare.java
+          test -s restored/NOSTALOOM-Retro-Launcher/app/src/main/java/com/mygamestudio/nostaloomlauncher/MochiSpriteView.java
+          "$RUNNER_TEMP/pixel-venv/bin/python" - <<'PY'
+          from pathlib import Path
+          import re
+          root=Path('restored/NOSTALOOM-Retro-Launcher')
+          p=root/'app/build.gradle'
+          s=p.read_text()
+          assert "applicationId 'com.mygamestudio.nostaloomlauncher.pixelpet'" in s
+          s=s.replace("applicationId 'com.mygamestudio.nostaloomlauncher.pixelpet'", "applicationId 'com.mygamestudio.nostaloomlauncher.restoredv031'")
+          s=re.sub(r'versionCode\s+12\b', 'versionCode 31', s)
+          s=s.replace("versionName '0.12'", "versionName '0.31-custom-wallpaper-test'")
+          p.write_text(s)
+          manifest=root/'app/src/main/AndroidManifest.xml'
+          m=manifest.read_text()
+          # Notification access has been linked to prior device warnings;
+          # preserve gameplay but do not register any notification listener in this test build.
+          m,n=re.subn(r'\s*<service\b[^>]*NotificationFruitService.*?</service>', '', m, flags=re.S)
+          assert n==1, 'Expected one legacy notification listener service'
+          m=m.replace('NOSTALOOM Pixel Pet OS 0.12', 'NOSTALOOM Pixel v0.31 Original')
+          manifest.write_text(m)
+
+          # Reuse the original wallpaper and Mochi engine. Render actual icon artwork,
+          # not invisible tap areas, and provide opt-in Android system screen lock.
+          java=root/'app/src/main/java/com/mygamestudio/nostaloomlauncher/PixelLauncherActivity.java'
+          src=java.read_text()
+          marker='        socialShortcut(SocialApp.WHATSAPP, 531);'
+          assert src.count(marker)==1
+          new_icons='''        tapZone("Calculator", 236, 858, 103, 120, this::calculator);
+          View fingerprintZone=tapZone("Lockscreen", 343, 858, 103, 120, this::lockScreen);
+          fingerprintZone.setOnLongClickListener(view -> {
+            openIntent(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS));
+            return true;
+          });
+          '''
+          src=src.replace(marker,new_icons+marker)
+          marker='    private void camera() {'
+          assert src.count(marker)==1
+          methods='''    private void calculator() {
+          if (launchInstalled("com.miui.calculator")) return;
+          if (launchInstalled("com.google.android.calculator")) return;
+          Intent intent = new Intent(Intent.ACTION_MAIN);
+          intent.addCategory(Intent.CATEGORY_APP_CALCULATOR);
+          openIntent(intent);
+          }
+          private void lockScreen() {
+          android.app.admin.DevicePolicyManager manager =
+            (android.app.admin.DevicePolicyManager)getSystemService(DEVICE_POLICY_SERVICE);
+          android.content.ComponentName admin = new android.content.ComponentName(
+            this, PixelScreenAdmin.class);
+          if (manager == null) {
+            Toast.makeText(this, "Device policy tidak tersedia", Toast.LENGTH_LONG).show();
+            return;
+          }
+          if (manager.isAdminActive(admin)) {
+            try {
+                manager.lockNow();
+            } catch (SecurityException ex) {
+                Toast.makeText(this, "Kunci skrin ditolak Android", Toast.LENGTH_LONG).show();
+            }
+            return;
+          }
+          // The user must explicitly approve Android Device Admin before first lock.
+          new AlertDialog.Builder(this).setTitle("Aktifkan Screen OFF?")
+            .setMessage("Benarkan NOSTALOOM mengunci skrin apabila ikon fingerprint ditekan? "
+                + "Android mengurus buka kunci dengan cap jari yang sudah didaftarkan. "
+                + "Kebenaran pentadbir peranti boleh ditarik balik melalui Security Settings.")
+            .setNegativeButton("Batal", (d, which) -> {})
+            .setPositiveButton("Aktifkan", (d, which) -> {
+                Intent intent = new Intent(android.app.admin.DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN);
+                intent.putExtra(android.app.admin.DevicePolicyManager.EXTRA_DEVICE_ADMIN, admin);
+                intent.putExtra(android.app.admin.DevicePolicyManager.EXTRA_ADD_EXPLANATION,
+                    "Kebenaran pilihan untuk Screen OFF melalui ikon Lockscreen");
+                startActivity(intent);
+            }).show();
+          }
+          '''
+          src=src.replace(marker,methods+marker)
+          java.write_text(src)
+
+          # Original wallpaper holds all eight icon sprites; only click zones are native.
+          # Register a device-admin receiver only for user-approved lockNow().
+          receiver=root/'app/src/main/java/com/mygamestudio/nostaloomlauncher/PixelScreenAdmin.java'
+          receiver.write_text('''package com.mygamestudio.nostaloomlauncher;
+          public final class PixelScreenAdmin extends android.app.admin.DeviceAdminReceiver {}
+          ''')
+          xml=root/'app/src/main/res/xml'
+          xml.mkdir(parents=True,exist_ok=True)
+          (xml/'nostaloom_device_admin.xml').write_text('''<?xml version="1.0" encoding="utf-8"?>
+          <device-admin xmlns:android="http://schemas.android.com/apk/res/android">
+          <uses-policies><force-lock /></uses-policies>
+          </device-admin>
+          ''')
+          manifest=root/'app/src/main/AndroidManifest.xml'
+          m=manifest.read_text()
+          receiver_tag='''<receiver android:name="com.mygamestudio.nostaloomlauncher.PixelScreenAdmin"
+          android:permission="android.permission.BIND_DEVICE_ADMIN" android:exported="true">
+          <meta-data android:name="android.app.device_admin" android:resource="@xml/nostaloom_device_admin" />
+          <intent-filter><action android:name="android.app.action.DEVICE_ADMIN_ENABLED" /></intent-filter>
+          </receiver>
+          '''
+          assert '</application>' in m
+          m=m.replace('</application>',receiver_tag+'</application>')
+          manifest.write_text(m)
+          # Prefer an opt-in Android 9+ accessibility lock action instead of
+          # DevicePolicyManager.lockNow(), which may require PIN/password after lock.
+          # The service does not read screen content or inspect interaction events.
+          java=root/'app/src/main/java/com/mygamestudio/nostaloomlauncher/PixelLauncherActivity.java'
+          src=java.read_text()
+          a=src.index('private void lockScreen() {')
+          a=src.rfind('\n',0,a)+1
+          b=src.index('    private void camera() {',a)
+          src=src[:a]+'''    private void lockScreen() {
+                  if (android.os.Build.VERSION.SDK_INT >= 28 && PixelScreenLockService.lockNow()) return;
+                  if (android.os.Build.VERSION.SDK_INT < 28) {
+                      Toast.makeText(this, "Lock dengan fingerprint memerlukan Android 9+", Toast.LENGTH_LONG).show();
+                      openIntent(new Intent(Settings.ACTION_SECURITY_SETTINGS));
+                      return;
+                  }
+                  new AlertDialog.Builder(this)
+                      .setTitle("Lockscreen + Fingerprint")
+                      .setMessage("Bagi membolehkan cap jari selepas kunci skrin, hidupkan perkhidmatan "
+                          + "NOSTALOOM Screen Lock di Accessibility Settings. "
+                          + "Perkhidmatan ini hanya melakukan tindakan Lock Screen dan tidak membaca "
+                          + "kandungan skrin. Android/MIUI tetap mengawal unlock dan mungkin meminta PIN. "
+                          + "Jika pernah menggunakan Device Admin untuk lockNow(), anda boleh nyahaktifkannya "
+                          + "melalui tetapan keselamatan Android.")
+                      .setPositiveButton("Tetapan Accessibility", (d, which) -> {
+                          openIntent(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS));
+                      })
+                      .setNegativeButton("Batal", (d, which) -> {})
+                      .show();
+              }
+          ''' + src[b:]
+          src=src.replace('openIntent(new Intent(Settings.ACTION_SECURITY_SETTINGS));\n            return true;\n        });',
+              'openIntent(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS));\n            return true;\n        });')
+          java.write_text(src)
+          service=root/'app/src/main/java/com/mygamestudio/nostaloomlauncher/PixelScreenLockService.java'
+          service.write_text('''package com.mygamestudio.nostaloomlauncher;
+          
+          public final class PixelScreenLockService extends android.accessibilityservice.AccessibilityService {
+              private static volatile PixelScreenLockService active;
+          
+              @Override public void onServiceConnected() {
+                  super.onServiceConnected();
+                  active=this;
+              }
+              @Override public boolean onUnbind(android.content.Intent intent) {
+                  if (active==this) active=null;
+                  return super.onUnbind(intent);
+              }
+              @Override public void onDestroy() {
+                  if (active==this) active=null;
+                  super.onDestroy();
+              }
+              @Override public void onAccessibilityEvent(android.view.accessibility.AccessibilityEvent event) {}
+              @Override public void onInterrupt() {}
+          
+              static boolean lockNow() {
+                  PixelScreenLockService current=active;
+                  return current!=null && android.os.Build.VERSION.SDK_INT>=28
+                      && current.performGlobalAction(GLOBAL_ACTION_LOCK_SCREEN);
+              }
+          }
+          ''')
+          xml=root/'app/src/main/res/xml'
+          (xml/'nostaloom_accessibility_lock.xml').write_text('''<?xml version="1.0" encoding="utf-8"?>
+          <accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
+              android:accessibilityEventTypes="typeViewClicked"
+              android:accessibilityFeedbackType="feedbackGeneric"
+              android:notificationTimeout="100"
+              android:canRetrieveWindowContent="false"
+              android:canPerformGestures="false" />
+          ''')
+          manifest=root/'app/src/main/AndroidManifest.xml'
+          m=manifest.read_text()
+          a11y='''<service android:name="com.mygamestudio.nostaloomlauncher.PixelScreenLockService"
+              android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
+              android:exported="true" android:label="NOSTALOOM Screen Lock">
+              <intent-filter>
+                  <action android:name="android.accessibilityservice.AccessibilityService" />
+              </intent-filter>
+              <meta-data android:name="android.accessibilityservice"
+                  android:resource="@xml/nostaloom_accessibility_lock" />
+          </service>
+          '''
+          assert '</application>' in m
+          m=m.replace('</application>',a11y+'</application>')
+          manifest.write_text(m)
+          # Clone the genuine Browser tile from the original artwork, preserving
+          # its identical pixel border, size, label plate, and sparkle details.
+          # Replace only the center glyph and caption for the two new siblings.
+          from PIL import Image, ImageDraw, ImageFont
+          picture=root/'app/src/main/res/drawable-nodpi/cozy_home.png'
+          im=Image.open(picture).convert('RGBA')
+          scale_x=im.width/540.0
+          scale_y=im.height/1170.0
+          def bb(left,top,right,bottom):
+              return (round(left*scale_x),round(top*scale_y),
+                      round(right*scale_x),round(bottom*scale_y))
+          src_rect=bb(132,858,235,978)
+          original=im.crop(src_rect)
+          out_size=(round(103*scale_x),round(120*scale_y))
+          original=original.resize(out_size,Image.Resampling.NEAREST)
+          def create_tile(fingerprint):
+              # Draw the pixel motifs in original 103x120 coordinate space and
+              # then scale using NEAREST, so the dark stepped outlines remain crisp.
+              tile=original.resize((103,120),Image.Resampling.NEAREST).copy()
+              d=ImageDraw.Draw(tile)
+              edge='#342544'
+              body='#c5efd9' if fingerprint else '#f1cfeb'
+              d.rounded_rectangle((15,14,89,86),radius=9,fill=body,outline=edge,width=3)
+              d.rectangle((19,21,84,81),fill=body)
+              if fingerprint:
+                  # Pixel 8-bit fingerprint, four nested curved ridges.
+                  for i in range(4):
+                      off=i*7
+                      d.arc((25+off,23+off,79-off,78-off),187,356,
+                            fill='#8b4eab',width=4)
+                  d.line((51,52,51,69),fill='#8b4eab',width=4)
+                  d.rectangle((51,22,56,27),fill='#fff6cd')
+              else:
+                  # Calculator with dark border, purple body, screen and keypad.
+                  d.rounded_rectangle((31,22,73,79),radius=4,fill='#6f448e',outline=edge,width=3)
+                  d.rectangle((37,29,67,40),fill='#e3d7ef',outline=edge,width=2)
+                  d.line((40,35,64,35),fill='#7b5b9d',width=2)
+                  for ry in range(3):
+                      for cx in range(3):
+                          x=37+cx*11;y=46+ry*10
+                          d.rectangle((x,y,x+7,y+7),
+                            fill='#f8e5fa' if (ry,cx)!=(2,2) else '#e6a9bd',
+                            outline='#3f2c57',width=1)
+              # Mask the original Browser caption with the same cream plate.
+              d.rounded_rectangle((12,89,94,116),radius=5,fill='#f7e9d8',outline=edge,width=2)
+              title='Lockscreen' if fingerprint else 'Calculator'
+              font=ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSansCondensed-Bold.ttf',10)
+              box=d.textbbox((0,0),title,font=font)
+              tw=box[2]-box[0]
+              d.text(((103-tw)/2,96),title,fill=edge,font=font)
+              return tile.resize(out_size,Image.Resampling.NEAREST)
+          im.alpha_composite(create_tile(False),bb(236,858,339,978)[:2])
+          im.alpha_composite(create_tile(True),bb(343,858,446,978)[:2])
+          im.convert('RGB').save(picture,optimize=True)
+          print('Matched both new tile frames to original Browser artwork',
+                im.size,src_rect)
+          # Remove Accessibility + Device Admin and preserve original graphics.
+          launcher=root/'app/src/main/java/com/mygamestudio/nostaloomlauncher/PixelLauncherActivity.java'
+          code=launcher.read_text()
+          a=code.index('private void lockScreen() {')
+          a=code.rfind('\n',0,a)+1
+          b=code.index('    private void camera() {',a)
+          safe_method='''    private void lockScreen() {
+          new AlertDialog.Builder(this).setTitle("Lockscreen")
+            .setMessage("Versi ujian ini tidak memerlukan Accessibility atau Device Admin. "
+                + "Untuk mengunci skrin, gunakan butang kuasa telefon. "
+                + "Fingerprint dikendalikan oleh Android Security Settings.")
+            .setPositiveButton("Tetapan Keselamatan", (d, which) ->
+                openIntent(new Intent(Settings.ACTION_SECURITY_SETTINGS)))
+            .setNegativeButton("Tutup", (d, which) -> {}).show();
+          }
+          '''
+          code=code[:a]+safe_method+code[b:]
+          code=code.replace('Settings.ACTION_ACCESSIBILITY_SETTINGS',
+                            'Settings.ACTION_SECURITY_SETTINGS')
+          launcher.write_text(code)
+          mpath=root/'app/src/main/AndroidManifest.xml'
+          manifest=mpath.read_text()
+          manifest,n_admin=re.subn(r'<receiver\b[^>]*PixelScreenAdmin.*?</receiver>',
+                                   '',manifest,flags=re.S)
+          manifest,n_access=re.subn(r'<service\b[^>]*PixelScreenLockService.*?</service>',
+                                    '',manifest,flags=re.S)
+          assert n_admin==1 and n_access==1,(n_admin,n_access)
+          mpath.write_text(manifest)
+          for oldfile in (
+              root/'app/src/main/java/com/mygamestudio/nostaloomlauncher/PixelScreenAdmin.java',
+              root/'app/src/main/java/com/mygamestudio/nostaloomlauncher/PixelScreenLockService.java',
+              root/'app/src/main/res/xml/nostaloom_device_admin.xml',
+              root/'app/src/main/res/xml/nostaloom_accessibility_lock.xml'):
+              if oldfile.exists():oldfile.unlink()
+          assert 'BIND_ACCESSIBILITY_SERVICE' not in manifest
+          assert 'BIND_DEVICE_ADMIN' not in manifest
+          # Restore the miniature island cat in warm white rather than brown,
+          # preserving its original custom pixel art and motion system.
+          sprite=root/'app/src/main/java/com/mygamestudio/nostaloomlauncher/MochiSpriteView.java'
+          cat=sprite.read_text()
+          assert 'private static final int GOLD = 0xffe3a371;' in cat
+          assert 'private static final int CREAM = 0xffffedcf;' in cat
+          cat=cat.replace('private static final int CREAM = 0xffffedcf;',
+                          'private static final int CREAM = 0xfffffff5; // Snow-white fur')
+          cat=cat.replace('private static final int GOLD = 0xffe3a371;',
+                          'private static final int GOLD = 0xffe8e6ee; // Soft lilac-white shading')
+          cat=cat.replace('private static final int PINK = 0xffed9c9c;',
+                          'private static final int PINK = 0xfff2b5ca; // Light pink ears')
+          cat=cat.replace('boolean asleep = action == MochiCare.Action.REST;',
+                          'boolean asleep = action == MochiCare.Action.REST;')
+          marker='            if (phase < 2900) {'
+          assert cat.count(marker)==1
+          cat=cat.replace(marker,
+            '            if (phase < 2900) {\n                asleep = true; // Quiet nap before wandering')
+          draw='        drawCat(canvas, catX, GROUND - hop, faceRight, walking, step, eating, dip, asleep, blink);'
+          assert cat.count(draw)==1
+          cat=cat.replace(draw,
+            '        float breathing = asleep ? (float)((now / 520L) % 2L) : 0f;\n'
+            '        drawCat(canvas, catX, GROUND - hop - breathing, faceRight, walking, step, eating, dip, asleep, blink);')
+          # A white high-contrast sprite that is easy to see on the floating island.
+          sprite.write_text(cat)
+          assert '0xfffffff5' in cat and '0xffe8e6ee' in cat
+          print('v0.31 Mochi: white fur, pink accents, subtle nap breathing, walking and yarn-play preserved')
+          
+          # Aim for approximately 30 frames per second only while launcher is visible.
+          # Keep the existing 8-bit animation and pause callbacks when app stops.
+          cat=cat.replace('postDelayed(frame, 80);',
+                          'postDelayed(frame, 33); // ~30 fps while visible')
+          assert 'postDelayed(frame, 33);' in cat
+          sprite.write_text(cat)
+          
+          activity=root/'app/src/main/java/com/mygamestudio/nostaloomlauncher/PixelLauncherActivity.java'
+          source=activity.read_text()
+          assert 'private String petLabel = "Mochi";' in source
+          source=source.replace('    private String petLabel = "Mochi";',
+          '''    private String petLabel = "Mochi";
+              private String playerName = "JAMAL";
+              private boolean petSoundEnabled = true;
+              private android.widget.TextView petSoundSwitch;
+              private android.media.SoundPool petSoundPool;
+              private final int[] petSoundIds = new int[4];''')
+          needle='        preferences = getPreferences(MODE_PRIVATE);'
+          assert source.count(needle)==1
+          source=source.replace(needle,needle+'''
+                  playerName = preferences.getString("player_name", "JAMAL");
+                  if (playerName == null || playerName.trim().isEmpty()) playerName = "JAMAL";
+                  petSoundEnabled = preferences.getBoolean("pet_sound_enabled", true);
+                  initPetSounds();''')
+          needle='        screen.place(petPanel, 196, 590, 230, 131);'
+          assert source.count(needle)==1
+          source=source.replace(needle,needle+'''
+                  petPanel.setPlayerName(playerName);
+                  tapZone("Edit HELLO name", 239, 596, 148, 24, this::editPlayerName);
+                  petSoundSwitch = new android.widget.TextView(this);
+                  petSoundSwitch.setGravity(android.view.Gravity.CENTER);
+                  petSoundSwitch.setTextSize(9);
+                  petSoundSwitch.setTypeface(android.graphics.Typeface.MONOSPACE,
+                      android.graphics.Typeface.BOLD);
+                  petSoundSwitch.setTextColor(0xff30233c);
+                  android.graphics.drawable.GradientDrawable soundFrame =
+                      new android.graphics.drawable.GradientDrawable();
+                  soundFrame.setColor(0xffe4c9f1);
+                  soundFrame.setCornerRadius(5);
+                  soundFrame.setStroke(2,0xff39294a);
+                  petSoundSwitch.setBackground(soundFrame);
+                  updatePetSoundSwitch();
+                  screen.place(petSoundSwitch, 389, 593, 37, 24);
+                  petSoundSwitch.setContentDescription("Toggle pet sound effects");
+                  petSoundSwitch.setOnClickListener(view -> {
+                      petSoundEnabled = !petSoundEnabled;
+                      preferences.edit().putBoolean("pet_sound_enabled", petSoundEnabled).apply();
+                      updatePetSoundSwitch();
+                      if (petSoundEnabled) playPetTone(2);
+                  });''')
+          needle='            petSprite.begin(action);'
+          assert source.count(needle)==1
+          source=source.replace(needle,needle+'''
+                      playPetTone(action.ordinal());''')
+          methodmarker='    private void petMenu() {'
+          assert source.count(methodmarker)==1
+          soundmethods='''    private void updatePetSoundSwitch() {
+                  if (petSoundSwitch != null)
+                      petSoundSwitch.setText(petSoundEnabled ? "♪ ON" : "♪ OFF");
+              }
+          
+              private void initPetSounds() {
+                  android.media.AudioAttributes attrs = new android.media.AudioAttributes.Builder()
+                      .setUsage(android.media.AudioAttributes.USAGE_GAME)
+                      .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                      .build();
+                  petSoundPool = new android.media.SoundPool.Builder()
+                      .setMaxStreams(2).setAudioAttributes(attrs).build();
+                  petSoundIds[0] = petSoundPool.load(this, R.raw.mochi_feed, 1);
+                  petSoundIds[1] = petSoundPool.load(this, R.raw.mochi_play, 1);
+                  petSoundIds[2] = petSoundPool.load(this, R.raw.mochi_pet, 1);
+                  petSoundIds[3] = petSoundPool.load(this, R.raw.mochi_rest, 1);
+              }
+          
+              private void playPetTone(int index) {
+                  if (!petSoundEnabled || petSoundPool == null) return;
+                  if (index < 0 || index >= petSoundIds.length) return;
+                  if (petSoundIds[index] > 0) petSoundPool.play(petSoundIds[index],
+                      0.30f, 0.30f, 1, 0, 1.0f);
+              }
+          
+              private void editPlayerName() {
+                  final EditText edit = new EditText(this);
+                  edit.setSingleLine(true);
+                  edit.setText(playerName);
+                  edit.selectAll();
+                  edit.setFilters(new android.text.InputFilter[] {
+                      new android.text.InputFilter.LengthFilter(14)
+                  });
+                  new AlertDialog.Builder(this).setTitle("Nama pemain")
+                      .setView(edit)
+                      .setPositiveButton("Simpan", (dialog, which) -> {
+                          String entered = edit.getText().toString().trim();
+                          if (entered.isEmpty()) entered = "PLAYER";
+                          playerName = entered.toUpperCase(Locale.US);
+                          preferences.edit().putString("player_name", playerName).apply();
+                          petPanel.setPlayerName(playerName);
+                      })
+                      .setNegativeButton("Batal", (dialog, which) -> {})
+                      .show();
+              }
+          
+          '''
+          source=source.replace(methodmarker,soundmethods+methodmarker)
+          # Extend the existing lifecycle method regardless of its super-call formatting.
+          m_destroy = re.search(r'void\s+onDestroy\s*\(\s*\)\s*\{', source)
+          assert m_destroy, 'Original Activity onDestroy missing'
+          source = source[:m_destroy.end()] + (
+              '\n        if (petSoundPool != null) { petSoundPool.release(); petSoundPool = null; }'
+          ) + source[m_destroy.end():]
+          activity.write_text(source)
+          
+          # Make the greeting editable while preserving the original Mochi HUD style.
+          hud=root/'app/src/main/java/com/mygamestudio/nostaloomlauncher/PixelHomeView.java'
+          view=hud.read_text()
+          head=view.index('    static final class PetPanel extends ArtworkView {')
+          tail=view.index('    static final class PetButton extends ArtworkView {',head)
+          portion=view[head:tail]
+          assert 'meter(canvas, "GEMBIRA", pet.happiness, 15,' in portion
+          portion=portion.replace('meter(canvas, "GEMBIRA", pet.happiness, 15,',
+                                  'meter(canvas, "HAPPINESS", pet.happiness, 32,')
+          portion=portion.replace('meter(canvas, "KENYANG", pet.fullness, 41,',
+                                  'meter(canvas, "HUNGER", pet.fullness, 58,')
+          portion=portion.replace('meter(canvas, "TENAGA", pet.energy, 67,',
+                                  'meter(canvas, "ENERGY", pet.energy, 84,')
+          portion=portion.replace('text(canvas, state, 13, 94, 12,',
+                                  'text(canvas, state, 13, 124, 10,')
+          portion=portion.replace('        @Override void drawArtwork(Canvas canvas) {',
+              '        @Override void drawArtwork(Canvas canvas) {\n' +
+              '            text(canvas, "HELLO, " + playerName + "!", 115, 18, 16, INK, Paint.Align.CENTER);',1)
+          portion=portion.replace('private String state = "Mochi";',
+                                 'private String state = "Mochi";\n        private String playerName = "JAMAL";')
+          portion=portion.replace('        void refresh(String nextState) {',
+          '''        void setPlayerName(String nextName) {
+                      playerName = nextName == null ? "PLAYER" : nextName;
+                      invalidate();
+                  }
+                  void refresh(String nextState) {''')
+          # Header now renders the saved playerName dynamically
+          view=view[:head]+portion+view[tail:]
+          hud.write_text(view)
+          
+          # Generate tiny original 8-bit WAV melodies. No downloads, microphone or audio permissions.
+          import wave,math
+          raw=root/'app/src/main/res/raw'
+          raw.mkdir(parents=True,exist_ok=True)
+          sr=22050
+          songs={
+            'mochi_feed': [(659,0.075),(784,0.075),(988,0.12)],
+            'mochi_play': [(784,0.065),(1046,0.065),(880,0.065),(1175,0.11)],
+            'mochi_pet': [(880,0.075),(988,0.075),(1318,0.13)],
+            'mochi_rest': [(784,0.105),(587,0.12),(440,0.18)]
+          }
+          for name,notes in songs.items():
+              samples=bytearray()
+              for hz,duration in notes:
+                  n=int(sr*duration)
+                  for i in range(n):
+                      t=i/sr
+                      envelope=min(1,i/180,max(0,(n-i)/420))
+                      pulse=1 if math.sin(2*math.pi*hz*t)>0 else -1
+                      sample=int(128 + 20*envelope*pulse)
+                      samples.append(max(0,min(255,sample)))
+                  samples.extend(b'\x80'*int(sr*0.018))
+              with wave.open(str(raw/(name+'.wav')),'wb') as sound:
+                  sound.setnchannels(1)
+                  sound.setsampwidth(1)
+                  sound.setframerate(sr)
+                  sound.writeframes(bytes(samples))
+          print('v0.31: 30fps target, 8-bit WAV pet sounds, persistent ON/OFF, editable HELLO name')
+          
+          # Keep the illustrated floating islands, cat sprite and original 8-bit controls,
+          # but improve time, date, interactive pet toolbar and the transparent system nav edge.
+          activity=root/'app/src/main/java/com/mygamestudio/nostaloomlauncher/PixelLauncherActivity.java'
+          source=activity.read_text()
+          # Show 01:55 PM; preserve the true locale-independent 12-hour clock.
+          source=source.replace('new SimpleDateFormat("HH:mm", Locale.US)',
+                                'new SimpleDateFormat("hh:mm a", Locale.US)')
+          source=source.replace('new SimpleDateFormat("EEE dd MMM", MALAY)',
+                                'new SimpleDateFormat("EEEE", Locale.ENGLISH)')
+          assert 'new SimpleDateFormat("hh:mm a", Locale.US)' in source
+          source=source.replace('    private final Runnable onNotificationChange = this::refreshFruits;',
+          '''    private final SimpleDateFormat numericDateFormat =
+                  new SimpleDateFormat("dd/MM/yyyy", Locale.US);
+              private final Runnable onNotificationChange = this::refreshFruits;''')
+          source=source.replace('        dateFormat.setTimeZone(timeZone);',
+                                '        dateFormat.setTimeZone(timeZone);\n        numericDateFormat.setTimeZone(timeZone);')
+          source=source.replace('datePlate.setDate(dateFormat.format(date).toUpperCase(MALAY));',
+                                'datePlate.setDate(dateFormat.format(date).toUpperCase(Locale.US)'
+                                ' + "|" + numericDateFormat.format(date));')
+          source=source.replace('        screen.place(datePlate, 128, 212, 124, 29);',
+                                '        screen.place(datePlate, 87, 203, 190, 43);')
+          # Edge-to-edge painting: give system navigation a transparent background and
+          # respect real display capabilities rather than requesting an unsupported Hz.
+          init='        setContentView(screen);'
+          assert source.count(init)==1
+          source=source.replace(init,init+'''
+                  if (android.os.Build.VERSION.SDK_INT >= 29) {
+                      getWindow().setNavigationBarContrastEnforced(false);
+                  }
+                  getWindow().setNavigationBarColor(android.graphics.Color.TRANSPARENT);
+                  getWindow().getDecorView().setSystemUiVisibility(
+                      View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION |
+                      View.SYSTEM_UI_FLAG_LAYOUT_STABLE |
+                      View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN |
+                      View.SYSTEM_UI_FLAG_FULLSCREEN
+                  );''')
+          # Avoid full-screen redraw when only tiny pet stats or date changes.
+          # New touch toolbar is added after legacy FEED/PLAY click targets, taking precedence.
+          needle='        addPetButton(false, 331, 93, MochiCare.Action.PLAY);'
+          assert source.count(needle)==1
+          toolbar='''        PixelHomeView.PetActionBar actionBar = new PixelHomeView.PetActionBar(this);
+                  screen.place(actionBar, 31, 676, 397, 54);
+                  tapZone("Feed Mochi", 34, 678, 79, 51, () -> petAction(MochiCare.Action.FEED));
+                  tapZone("Play with Mochi", 113, 678, 77, 51, () -> petAction(MochiCare.Action.PLAY));
+                  tapZone("Pet Mochi", 191, 678, 77, 51, () -> petAction(MochiCare.Action.PET));
+                  tapZone("Let Mochi rest", 269, 678, 77, 51, () -> petAction(MochiCare.Action.REST));'''
+          source=source.replace(needle,needle+'\n'+toolbar)
+          # Preserve sound ON/OFF state and put control into the last toolbar cell.
+          source=source.replace('screen.place(petSoundSwitch, 389, 593, 37, 24);',
+                                'screen.place(petSoundSwitch, 353, 683, 68, 36);')
+          # Last-added views receive taps first. Place a new sound button above toolbar.
+          source=source.replace('        tapZone("Let Mochi rest", 269, 678, 77, 51, () -> petAction(MochiCare.Action.REST));',
+                                '        tapZone("Let Mochi rest", 269, 678, 77, 51, () -> petAction(MochiCare.Action.REST));'
+                                '\n        petSoundSwitch.bringToFront();')
+          activity.write_text(source)
+          
+          hud=root/'app/src/main/java/com/mygamestudio/nostaloomlauncher/PixelHomeView.java'
+          view=hud.read_text()
+          # Ensure only the tiny clock changes and keep its original dot matrix digit palette.
+          clock_a=view.index('    static final class DotClock extends ArtworkView {')
+          clock_b=view.index('    static final class DeviceLine extends ArtworkView {',clock_a)
+          clk=view[clock_a:clock_b]
+          assert 'private String time = "";' in clk
+          clk=clk.replace('private String time = "";',
+                          'private String time = "";\n        private String period = "AM";')
+          clk=clk.replace('            time = next;',
+                          '            period = next.endsWith("PM") ? "PM" : "AM";\n            time = next;')
+          clk=clk.replace('            for (int row = 0; row < 9; row++) {',
+                          '            canvas.save();\n            canvas.scale(.77f, 1f);\n            for (int row = 0; row < 9; row++) {')
+          marker='        }\n    }\n\n'
+          assert marker in clk
+          clk=clk.replace(marker,
+                          '            canvas.restore();\n'
+                          '            text(canvas, period, 164, 46, 20, 0xffefc5ff, Paint.Align.CENTER);\n'
+                          '        }\n    }\n\n',1) if False else clk
+          # insert at the actual final drawArtwork method close
+          at=clk.rfind('        }\n    }')
+          assert at>0
+          clk=clk[:at]+'''            canvas.restore();
+                      text(canvas, period, 169, 45, 18, 0xffefc5ff, Paint.Align.CENTER);
+          '''+clk[at:]
+          view=view[:clock_a]+clk+view[clock_b:]
+          da=view.index('    static final class DatePlate extends ArtworkView {')
+          db=view.index('    static final class Fruit extends ArtworkView {',da)
+          date=view[da:db]
+          assert 'super(context, 124, 29)' in date
+          date=date.replace('super(context, 124, 29)', 'super(context, 190, 43)')
+          old='''            paint.setColor(0xffae98c0);
+                      canvas.drawRoundRect(0, 0, 124, 29, 6, 6, paint);
+                      text(canvas, value, 61, 21, 16, INK, Paint.Align.CENTER);'''
+          new='''            paint.setColor(0xffd7b6ed);
+                      canvas.drawRoundRect(0, 0, 190, 43, 7, 7, paint);
+                      int split=value.indexOf('|');
+                      String weekday=split<0?value:value.substring(0,split);
+                      String numeric=split<0?"":value.substring(split+1);
+                      text(canvas, weekday, 95, 18, 14, INK, Paint.Align.CENTER);
+                      text(canvas, numeric, 95, 36, 13, INK, Paint.Align.CENTER);'''
+          assert old in date
+          date=date.replace(old,new)
+          view=view[:da]+date+view[db:]
+          # Add lightweight Canvas-drawn button frame; text remains native, no heavy assets.
+          widget='''    static final class PetActionBar extends ArtworkView {
+                  PetActionBar(Context context) { super(context, 397, 54); }
+                  @Override void drawArtwork(Canvas canvas) {
+                      final String[] labels={"FEED","PLAY","PET","REST","SOUND"};
+                      final int[] pastels={0xfff6d9c4,0xffeed6fc,0xfff6cbdf,0xffd7c9f5,0xffe7e3da};
+                      for(int i=0;i<5;i++) {
+                          int x=i*79;
+                          paint.setColor(0xff413153);
+                          canvas.drawRoundRect(x+1,1,x+77,52,7,7,paint);
+                          paint.setColor(pastels[i]);
+                          canvas.drawRoundRect(x+4,4,x+74,49,5,5,paint);
+                          text(canvas, labels[i], x+39, 42, 12, 0xff382646,Paint.Align.CENTER);
+                          paint.setColor(0xff764e92);
+                          if(i==0){canvas.drawOval(x+27,15,x+51,27,paint);}
+                          else if(i==1){canvas.drawRoundRect(x+25,15,x+53,29,5,5,paint);}
+                          else if(i==2){canvas.drawCircle(x+39,22,8,paint);}
+                          else if(i==3){canvas.drawRoundRect(x+25,17,x+54,29,3,3,paint);}
+                          else {canvas.drawCircle(x+39,20,8,paint);}
+                      }
+                  }
+              }
+          
+          '''
+          pos=view.index('    static final class PetButton extends ArtworkView {')
+          view=view[:pos]+widget+view[pos:]
+          hud.write_text(view)
+          print('v0.31: immersive wallpaper edge, live dot-matrix 12h AM/PM, full weekday, dd/MM/yyyy, pet buttons')
+          
+          # Let users select the exact approved fantasy image and store it privately.
+          # This avoids baking a non-native screenshot into code and keeps hit boxes tappable.
+          hud=root/'app/src/main/java/com/mygamestudio/nostaloomlauncher/PixelHomeView.java'
+          view=hud.read_text()
+          assert 'private final Bitmap artwork;' in view
+          view=view.replace('private final Bitmap artwork;', 'private Bitmap artwork;')
+          needle='        artwork = BitmapFactory.decodeResource(getResources(), R.drawable.cozy_home);'
+          assert view.count(needle)==1
+          view=view.replace(needle,needle+'''
+                  java.io.File custom = new java.io.File(context.getFilesDir(), "nostaloom_wallpaper.png");
+                  if (custom.exists()) {
+                      Bitmap restored = BitmapFactory.decodeFile(custom.getAbsolutePath());
+                      if (restored != null) {
+                          artwork.recycle();
+                          artwork = restored;
+                      }
+                  }''')
+          mark='    void place(View view, int left, int top, int width, int height) {'
+          assert view.count(mark)==1
+          view=view.replace(mark,'''    void useWallpaper(Bitmap bitmap) {
+                  if (bitmap == null) return;
+                  Bitmap previous = artwork;
+                  artwork = bitmap;
+                  invalidate();
+                  if (previous != bitmap) previous.recycle();
+              }
+          
+          '''+mark)
+          hud.write_text(view)
+          
+          activity=root/'app/src/main/java/com/mygamestudio/nostaloomlauncher/PixelLauncherActivity.java'
+          source=activity.read_text()
+          anchor='        setContentView(screen);'
+          assert source.count(anchor)==1
+          source=source.replace(anchor,anchor+'''
+                  screen.setLongClickable(true);
+                  screen.setOnLongClickListener(view -> {
+                      selectWallpaper();
+                      return true;
+                  });''')
+          # A single tappable transparent region in the open sky also opens wallpaper picker.
+          anchor='        tapZone("Camera", 26, 749, 92, 112, this::camera);'
+          assert source.count(anchor)==1
+          source=source.replace(anchor,
+              '        tapZone("Wallpaper", 352, 402, 77, 76, this::selectWallpaper);\n'+anchor)
+          anchor='    private void petMenu() {'
+          assert source.count(anchor)==1
+          methods='''    private static final int REQUEST_WALLPAPER = 3201;
+          
+              private void selectWallpaper() {
+                  Intent picker = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+                  picker.addCategory(Intent.CATEGORY_OPENABLE);
+                  picker.setType("image/*");
+                  try {
+                      startActivityForResult(picker, REQUEST_WALLPAPER);
+                  } catch (android.content.ActivityNotFoundException ex) {
+                      Toast.makeText(this, "No image picker available", Toast.LENGTH_LONG).show();
+                  }
+              }
+          
+              @Override protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+                  super.onActivityResult(requestCode, resultCode, data);
+                  if (requestCode != REQUEST_WALLPAPER || resultCode != RESULT_OK ||
+                      data == null || data.getData() == null) return;
+                  android.net.Uri uri = data.getData();
+                  try {
+                      android.graphics.BitmapFactory.Options probe = new android.graphics.BitmapFactory.Options();
+                      probe.inJustDecodeBounds = true;
+                      try (java.io.InputStream stream = getContentResolver().openInputStream(uri)) {
+                          android.graphics.BitmapFactory.decodeStream(stream, null, probe);
+                      }
+                      android.graphics.BitmapFactory.Options options = new android.graphics.BitmapFactory.Options();
+                      int largest = Math.max(probe.outWidth, probe.outHeight);
+                      options.inSampleSize = 1;
+                      while (largest / options.inSampleSize > 2000) options.inSampleSize *= 2;
+                      android.graphics.Bitmap bitmap;
+                      try (java.io.InputStream stream = getContentResolver().openInputStream(uri)) {
+                          bitmap = android.graphics.BitmapFactory.decodeStream(stream, null, options);
+                      }
+                      if (bitmap == null) throw new java.io.IOException("Invalid image");
+                      java.io.File save = new java.io.File(getFilesDir(), "nostaloom_wallpaper.png");
+                      try (java.io.FileOutputStream stream = new java.io.FileOutputStream(save)) {
+                          if (!bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, stream))
+                              throw new java.io.IOException("Image encoding failed");
+                      }
+                      screen.useWallpaper(bitmap);
+                      Toast.makeText(this, "Fantasy wallpaper applied", Toast.LENGTH_SHORT).show();
+                  } catch (Exception ex) {
+                      Toast.makeText(this, "Unable to load wallpaper", Toast.LENGTH_LONG).show();
+                  }
+              }
+          
+          '''
+          source=source.replace(anchor,methods+anchor)
+          activity.write_text(source)
+          print('v0.31: import full artwork from Gallery/Files using Android Open Document picker, persist private image, preserve active controls')
+          print('Security check: privileged lock components removed')
+          print('v0.31: fingerprint-friendly opt-in accessibility lock without reading screen')
+          print('v0.31: visible calculator/fingerprint icons and opt-in Android screen lock')
+          print('Restored complete v0.12 source with original cozy_home.png and gameplay')
+          print('Removed notification listener registration for this test build')
+          PY
+      - name: Install Android SDK 34
+        shell: bash
+        run: |
+          set -euo pipefail
+          export ANDROID_HOME="$RUNNER_TEMP/android-sdk"
+          mkdir -p "$ANDROID_HOME/cmdline-tools"
+          curl -fLsS --retry 3 https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip -o "$RUNNER_TEMP/tools.zip"
+          unzip -q "$RUNNER_TEMP/tools.zip" -d "$ANDROID_HOME/cmdline-tools"
+          mv "$ANDROID_HOME/cmdline-tools/cmdline-tools" "$ANDROID_HOME/cmdline-tools/latest"
+          echo "ANDROID_HOME=$ANDROID_HOME" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> "$GITHUB_ENV"
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$ANDROID_HOME" --licenses >/dev/null || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$ANDROID_HOME" "platforms;android-34" "build-tools;34.0.0"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+      - name: Build full restored app from original sources
+        working-directory: restored/NOSTALOOM-Retro-Launcher
+        run: gradle --no-daemon assembleDebug
+      - name: Verify package, signature and original art
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK=restored/NOSTALOOM-Retro-Launcher/app/build/outputs/apk/debug/app-debug.apk
+          test -s "$APK"
+          "$ANDROID_HOME/build-tools/34.0.0/zipalign" -c -v 4 "$APK"
+          "$ANDROID_HOME/build-tools/34.0.0/apksigner" verify --verbose --print-certs "$APK"
+          "$ANDROID_HOME/build-tools/34.0.0/aapt" dump badging "$APK" | head -4 | tee app-info.txt
+          grep -F "com.mygamestudio.nostaloomlauncher.restoredv031" app-info.txt
+          "$ANDROID_HOME/build-tools/34.0.0/aapt" dump permissions "$APK" | tee app-permissions.txt
+          if grep -E 'android.permission.(BIND_NOTIFICATION_LISTENER_SERVICE|BIND_ACCESSIBILITY_SERVICE|READ_SMS|READ_CALL_LOG|QUERY_ALL_PACKAGES)' app-permissions.txt; then
+            echo "::error::Restricted permission unexpectedly found"
+            exit 1
+          fi
+          unzip -Z -1 "$APK" | grep -F 'res/drawable-nodpi' || echo "Resource packaging uses compiled asset identifiers"
+          sha256sum "$APK" | tee SHA256.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: NOSTALOOM-Pixel-v0.31-Original-Graphics-Test
+          path: |
+            restored/NOSTALOOM-Retro-Launcher/app/build/outputs/apk/debug/app-debug.apk
+            app-info.txt
+            app-permissions.txt
+            SHA256.txt
+          if-no-files-found: error
+      - name: Publish v0.31 test APK on GitHub Releases
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir dist
+          cp restored/NOSTALOOM-Retro-Launcher/app/build/outputs/apk/debug/app-debug.apk dist/NOSTALOOM-Pixel-v0.31-Original-Graphics-Test.apk
+          cp SHA256.txt app-permissions.txt dist/
+          cat > dist/README.txt <<'EOF'
+          NOSTALOOM Pixel v0.31 White Mochi and Browser-Matched Icons Test.
+          Restored from the real archived v0.12 source, including cozy_home.png,
+          original floating-island wallpaper and Mochi cat game components.
+          Rebuilt as a separate package for safe side-by-side installation.
+          Notification listener is disabled in this build.
+          Debug-signed test APK; not Play Protect certified.
+          No Accessibility or Device Admin services included.
+          White island cat: ~30fps on screen, idle naps, walks, yarn play, breathing.
+          New cute 8-bit pet SFX and persistent Sound ON/OFF switch.
+          Tap HELLO to edit the saved player name.
+          Live 12h dot-matrix AM/PM, full English weekday, numeric dd/MM/yyyy.
+          New feed/play/pet/rest toolbar and transparent Android nav bar.
+          Long-press empty sky or tap open sky to select an image via Android Files.
+          Exact user-selected wallpaper persists, with real tappable controls overlay.
+          The Lockscreen icon opens Android security settings; use power key to lock.
+          Do not bypass Google Play Protect warnings.
+          EOF
+          gh release create v0.31-original-graphics-test \
+            dist/NOSTALOOM-Pixel-v0.31-Original-Graphics-Test.apk \
+            dist/SHA256.txt dist/app-permissions.txt dist/README.txt \
+            --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+            --title "NOSTALOOM Pixel v0.31 - Fantasy Wallpaper Picker + Interactive Mochi (Test)" \
+            --notes "Adds user-selected full-screen wallpaper import, 12h dot-matrix clock, full weekday/date, immersive nav and active pet controls. Default original wallpaper retained. No Accessibility or Device Admin capability. Lock icon provides access to Android security settings. Separate debug app ID, notification listener disabled for safer testing. Test build only, not Play Protect certified." \
+            --prerelease
