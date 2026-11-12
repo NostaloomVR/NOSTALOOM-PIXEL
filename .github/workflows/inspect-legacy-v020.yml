@@ -29,3 +29,14 @@ jobs:
           unzip -p releases/v0.12/NOSTALOOM-Pixel-Pet-OS-v0.12-source.zip '*/app/src/main/AndroidManifest.xml'
           echo '=== SOURCE README CONTENT ==='
           unzip -p releases/v0.12/NOSTALOOM-Pixel-Pet-OS-v0.12-source.zip '*README*' | head -80 || true
+
+          echo '=== PIXEL HOME STRUCTURE AND SHORTCUT HANDLERS ==='
+          unzip -p releases/v0.12/NOSTALOOM-Pixel-Pet-OS-v0.12-source.zip '*/PixelHomeView.java' > /tmp/PixelHomeView.java
+          grep -nEi 'calc|finger|lock|hud|pet|mochi|happy|hunger|energy|shortcut|icon|appdrawer|grid' /tmp/PixelHomeView.java | head -145 || true
+          echo '=== PIXEL HOME HEAD ==='
+          sed -n '1,160p' /tmp/PixelHomeView.java
+          echo '=== PIXEL LAUNCHER STRUCTURE ==='
+          unzip -p releases/v0.12/NOSTALOOM-Pixel-Pet-OS-v0.12-source.zip '*/PixelLauncherActivity.java' > /tmp/PixelLauncherActivity.java
+          grep -nEi 'calc|finger|lock|hud|pet|mochi|happy|hunger|energy|shortcut|icon|appdrawer|grid|onCreate' /tmp/PixelLauncherActivity.java | head -150 || true
+          echo '=== PIXEL HOME END ==='
+          tail -100 /tmp/PixelHomeView.java
