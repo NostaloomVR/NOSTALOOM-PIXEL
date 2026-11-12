@@ -166,8 +166,11 @@ public final class MainActivity extends Activity {
         LinearLayout actions=horizontal();
         TextView feed=action("♥ FEED",LAVENDER,()->doPetAction("EAT"));
         actions.addView(feed,new LinearLayout.LayoutParams(0,dp(30),1));
+        TextView play=action("★ PLAY",LAVENDER,()->doPetAction("PLAY"));
+        LinearLayout.LayoutParams playLP=new LinearLayout.LayoutParams(0,dp(30),1);playLP.leftMargin=dp(4);
+        actions.addView(play,playLP);
         soundText=action("♫ ON",LAVENDER,()->{sound=!sound;syncPet();});
-        LinearLayout.LayoutParams sLP=new LinearLayout.LayoutParams(0,dp(30),1);sLP.leftMargin=dp(7);
+        LinearLayout.LayoutParams sLP=new LinearLayout.LayoutParams(0,dp(30),1);sLP.leftMargin=dp(4);
         actions.addView(soundText,sLP);
         add(petPanel,actions,30);
         petPanel.setOnLongClickListener(v->{showPetActions();return true;});
@@ -179,11 +182,11 @@ public final class MainActivity extends Activity {
             for(String app:rowNames){
                 LinearLayout tile=vertical();tile.setGravity(Gravity.CENTER);
                 LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,dp(85),1);
-                lp.leftMargin=dp(3);lp.rightMargin=dp(3);line.addView(tile,lp);
+                lp.leftMargin=dp(1);lp.rightMargin=dp(1);line.addView(tile,lp);
                 LinearLayout plaque=vertical();plaque.setGravity(Gravity.CENTER);
                 plaque.setBackground(outlined(0xffe7d7e5,13,BORDER));
-                tile.addView(plaque,item(66,65));
-                PixelGlyph glyph=new PixelGlyph(app);plaque.addView(glyph,item(45,45));
+                tile.addView(plaque,item(48,54));
+                PixelGlyph glyph=new PixelGlyph(app);plaque.addView(glyph,item(36,40));
                 TextView name=label(app,9,INK);name.setBackground(shape(CREAM,5));
                 add(tile,name,18);
                 tile.setOnClickListener(v->shortcut(app));
